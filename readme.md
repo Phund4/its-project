@@ -406,7 +406,9 @@ flowchart LR
   - [Открытые транспортные данные городов (пример)](https://opentransportdata.swiss/en/)  
   - [Пример датасета по трафику и дорожным событиям](https://archive.ics.uci.edu/)
 - **Примеры датасетов по видеоаналитике транспорта**:
-  - [Пример датасета для детекции транспортных средств](https://ai.stanford.edu/~jkrause/cars/car_dataset.html)
+  - [Traffic Object Detection (HF)](https://huggingface.co/datasets/AITC-Traffic-Density/Traffic-Object-Detection)
+  - [Road Traffic (HF)](https://huggingface.co/datasets/Francesco/road-traffic)
+  - [UVH-26 – Urban Vehicle Hub (HF)](https://huggingface.co/datasets/iisc-aim/UVH-26)
 - **Технологии и стек**:
   - [Apache Kafka Documentation](https://kafka.apache.org/documentation/)  
   - [ClickHouse Documentation](https://clickhouse.com/docs/)  
