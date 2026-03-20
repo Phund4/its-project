@@ -330,19 +330,19 @@ flowchart LR
   extSensors -->|"gRPC/HTTP"| dataIngest
   extCityDB -->|"REST/Batch"| dataIngest
 
-  dataIngest --> dataLake
-  dataLake -->|"SQL/OLAP"| mlGateway
+  dataIngest -->|"Kafka (topics/streams)"| dataLake
+  dataLake -->|"SQL queries"| mlGateway
   mlGateway -->|"REST/gRPC к ML"| mlService
   mlService -->|"REST/gRPC ответ"| mlGateway
-  mlGateway -->|"запись результатов"| dataLake
-  dataLake -->|"SQL/OLAP"| analytics
+  mlGateway -->|"SQL INSERT"| dataLake
+  dataLake -->|"SQL queries"| analytics
   analytics -->|"REST/gRPC"| adapters
   analytics -->|"REST/WebSocket"| ui
 
   adapters -->|"REST/gRPC к внешним системам"| trafficCtrl
   operators -->|"HTTP/Web UI"| ui
   ui -->|"действия пользователя/WebSocket"| operators
-  analytics -->|"метрики/ивенты"| monitoring
+  analytics -->|"metrics (Prometheus)"| monitoring
 ```
 
 ---
@@ -363,7 +363,7 @@ flowchart LR
 
 - **Объектное хранилище (S3-совместимое)** для сырых данных и видеоконтента:
   - масштабируемое хранение больших объёмов, долговременное хранение.
-- **Колонночная СУБД (ClickHouse)** для аналитических запросов, агрегатов и результатов вызовов ML:
+- **Колоночная СУБД (ClickHouse)** для аналитических запросов, агрегатов и результатов вызовов ML:
   - высокая производительность на временных рядах и событиях.
 - При необходимости **PostgreSQL** для метаданных, конфигурации и транзакционных сценариев.
 
