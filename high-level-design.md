@@ -320,13 +320,13 @@ flowchart LR
     analytics["AnalyticsOrchestration"]
     monitoring["MonitoringAlerting"]
     adapters["IntegrationAdapters"]
+    prometheus["Prometheus"]
   end
 
   mlService["ML-сервис (внешний)"]
   trafficCtrl["Системы управления"]
   operators["Операторы"]
-  grafana["Grafana (внешняя)"]
-  prometheus["Prometheus"]
+  grafana["Grafana"]
 
   extCameras -->|"RTSP/HTTP: видео, кадры"| dataIngest
   extSensors -->|"gRPC/HTTP: телеметрия, датчики"| dataIngest
@@ -341,13 +341,13 @@ flowchart LR
   analytics -->|"REST/gRPC: команды интеграций"| adapters
 
   adapters -->|"REST/gRPC: рекомендации, команды"| trafficCtrl
-  analytics -->|"HTTP /metrics<br/>источник: Analytics"| monitoring
-  mlGateway -->|"HTTP /metrics<br/>источник: ML Gateway"| monitoring
+  analytics -->|"HTTP /metrics"| monitoring
+  mlGateway -->|"HTTP /metrics"| monitoring
   dataLake -->|"HTTP /metrics<br/>источник: DataLake"| monitoring
   prometheus -->|"scrape /metrics (pull)"| monitoring
-  grafana -->|"HTTP: Prometheus API<br/>(запросы метрик для дашбордов)"| prometheus
+  grafana -->|"HTTP: Prometheus API"| prometheus
   operators -->|"HTTP: открытие дашбордов"| grafana
-  operators -.->|"операторский UI: карта, инциденты, настройки<br/>(упрощённо на схеме)"| analytics
+  operators -.->|"операторский UI: карта, инциденты, настройки"| analytics
 ```
 
 - **Внешние источники → DataIngestion**  
