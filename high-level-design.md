@@ -296,10 +296,10 @@ flowchart LR
   - оркестрация потоков (когда вызывать ML, какие данные отдавать во внешние системы);
   - агрегация и подготовка данных для **операторского API** (карта, инциденты, настройки) и для интеграций; отдельного модуля «UI дашбордов» в Core нет.
 
-- **Monitoring & Alerting**:
-  - сбор и **экспорт метрик** (в т.ч. в формате **Prometheus** по **HTTP `/metrics`**) по Core-сервису, задержкам и ошибкам вызовов ML API, состоянию хранилища;
-  - **дашборды и графики** для персонала не строятся этим модулем — их даёт **внешняя Grafana**, подключённая к Prometheus;
-  - алерты по правилам (Prometheus/Alertmanager или аналог) доставляются в привычные каналы; просмотр «как на дашборде» — в Grafana.
+- **Prometheus** (наблюдаемость Core в контуре развёртывания):
+  - **периодический scrape** (`pull`) эндпоинтов **`/metrics`** у сервисов Core (Analytics, ML Gateway, Data Lake и при необходимости других компонентов) в формате **Prometheus**;
+  - хранение временных рядов, **recording/alerting rules**; доставка алертов через **Alertmanager** (или аналог) в привычные каналы;
+  - **Grafana** запрашивает данные у **Prometheus** по **HTTP (Prometheus API)** — дашборды и графики строит **Grafana**, не сам Prometheus.
 
 - **Integration Adapters**:
   - выходные интеграции с системами управления светофорами/дорожной инфраструктурой и с приложениями для граждан (маршрутизация, уведомления);
@@ -318,7 +318,6 @@ flowchart LR
     dataLake["DataLake/DWH"]
     mlGateway["ML Gateway"]
     analytics["AnalyticsOrchestration"]
-    monitoring["MonitoringAlerting"]
     adapters["IntegrationAdapters"]
     prometheus["Prometheus"]
   end
@@ -341,10 +340,9 @@ flowchart LR
   analytics -->|"REST/gRPC: команды интеграций"| adapters
 
   adapters -->|"REST/gRPC: рекомендации, команды"| trafficCtrl
-  analytics -->|"HTTP /metrics"| monitoring
-  mlGateway -->|"HTTP /metrics"| monitoring
-  dataLake -->|"HTTP /metrics<br/>источник: DataLake"| monitoring
-  prometheus -->|"scrape /metrics (pull)"| monitoring
+  prometheus -->|"scrape /metrics (pull)"| analytics
+  prometheus -->|"scrape /metrics (pull)"| mlGateway
+  prometheus -->|"scrape /metrics (pull)"| dataLake
   grafana -->|"HTTP: Prometheus API"| prometheus
   operators -->|"HTTP: открытие дашбордов"| grafana
   operators -.->|"операторский UI: карта, инциденты, настройки"| analytics
@@ -368,14 +366,13 @@ flowchart LR
 - **Analytics → Adapters**  
   - **REST/gRPC** к адаптерам — **команды и рекомендации** для дорожных систем.
 
-- **Операторы на этой диаграмме**  
-  - **Сплошная стрелка** — **Grafana**: открытие тех. дашбордов по **HTTP**. **Пунктир** — операционный доступ к **карте, инцидентам, настройкам** через **API Analytics** (отдельного блока «UI» в Core нет; на схеме показано **упрощённо**, чтобы не смешивать с цепочкой метрик).
+- **Prometheus и Grafana**  
+  - Сервисы **Analytics**, **ML Gateway**, **Data Lake** экспонируют **HTTP `/metrics`** в формате **Prometheus**; **Prometheus** **периодически скрейпит** (`pull`) эти эндпоинты (на схеме — отдельная стрелка на каждый целевой сервис).  
+  - **Grafana** запрашивает данные у **Prometheus** по **HTTP (Prometheus API)** и строит дашборды; алерты — по правилам **Prometheus** и **Alertmanager** (или аналог).  
+  - На **контекстной диаграмме (§5.1)** наблюдаемость показана обобщённо как **«Мониторинг и отчётность»**; здесь — конкретизация: **Prometheus** как компонент стека в контуре Core.
 
-- **Экспорт метрик, Prometheus и Grafana**  
-  - Модули Core отдают **метрики в формате Prometheus** по **HTTP `/metrics`** в зону **MonitoringAlerting** (на схеме — агрегированная точка скрейпа).  
-  - **Prometheus** **периодически скрейпит** (`pull`) **`/metrics`** у Monitoring (или у отдельных сервисов — в зависимости от развёртывания); **Grafana** **не** ходит в Monitoring за метриками напрямую, а запрашивает данные у **Prometheus** по **HTTP (Prometheus API)** и строит графики.  
-  - **Monitoring** не рисует дашборды: визуализация — **внешняя Grafana**; алерты — по правилам **Prometheus/Alertmanager** (или аналог).  
-  - **Оператор**: **Grafana** — тех. мониторинг; **карта, инциденты, режимы** — через клиент к **API аналитики** (пунктир на схеме).
+- **Операторы на этой диаграмме**  
+  - **Сплошная стрелка** — **Grafana** (открытие тех. дашбордов по **HTTP**). **Пунктир** — операционный доступ к **карте, инцидентам, настройкам** через **API Analytics** (отдельного блока «UI» в Core нет; на схеме показано **упрощённо**, чтобы не смешивать с цепочкой метрик).
 
 ---
 
