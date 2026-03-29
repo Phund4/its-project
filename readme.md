@@ -340,10 +340,9 @@ flowchart LR
   analytics -->|"REST/gRPC: команды интеграций"| adapters
 
   adapters -->|"REST/gRPC: рекомендации, команды"| trafficCtrl
-  operators <-->|"HTTP/REST+WS: карта, инциденты, настройки"| analytics
-  analytics -->|"HTTP: /metrics, метрики приложения"| monitoring
-  mlGateway -->|"HTTP: /metrics, метрики ML API"| monitoring
-  dataLake -->|"HTTP: /metrics, метрики хранилища"| monitoring
+  analytics -->|"HTTP /metrics<br/>источник: Analytics"| monitoring
+  mlGateway -->|"HTTP /metrics<br/>источник: ML Gateway"| monitoring
+  dataLake -->|"HTTP /metrics<br/>источник: DataLake"| monitoring
   grafana -->|"HTTP: запросы к API Prometheus"| monitoring
   operators -->|"HTTP: открытие дашбордов"| grafana
 ```
@@ -363,14 +362,16 @@ flowchart LR
 - **ML Gateway ↔ ML-сервис**  
   - **REST (JSON)** или **gRPC (Protobuf)**: запрос «сделай прогноз/детекцию по этим входным данным»; ответ — **числа прогноза, рамки объектов, флаги инцидентов**.
 
-- **Analytics → Adapters; операторы**  
-  - **REST/gRPC** к адаптерам — **команды и рекомендации** для дорожных систем.  
-  - **HTTP/REST** (и при необходимости **WebSocket**) к **операторам** (клиентское приложение/портал) — **карта, инциденты, настройки**; отдельного блока «UI/Dashboards» в Core нет.
+- **Analytics → Adapters**  
+  - **REST/gRPC** к адаптерам — **команды и рекомендации** для дорожных систем.
+
+- **Операторы на этой диаграмме**  
+  - Связаны только с **Grafana** (открытие дашбордов по **HTTP**). Операционный доступ к карте/инцидентам через **API аналитики** на схеме **не показан** (отдельного блока «UI/Dashboards» в Core нет).
 
 - **Экспорт метрик → Monitoring; дашборды — Grafana**  
   - Модули отдают **метрики в формате Prometheus** по **HTTP `/metrics`**.  
   - **Monitoring** не рисует дашборды: он **экспонирует метрики** для **Prometheus**; **Grafana** по **HTTP** запрашивает у Prometheus данные (**Prometheus HTTP API**) и показывает **графики и алерты**.  
-  - **Оператор**: **Grafana** — для **метрик и тех. дашбордов**; **API аналитики** — для **операционной работы** (карта, инциденты, режимы).
+  - **Оператор**: на диаграмме — **Grafana** (**метрики и тех. дашборды**); операционная работа (карта, инциденты, режимы) — через **API аналитики** вне этой стрелки.
 
 ---
 
