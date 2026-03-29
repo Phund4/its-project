@@ -348,10 +348,10 @@ flowchart LR
   adapters -->|"REST/gRPC: рекомендации, команды"| trafficCtrl
   operators -->|"HTTP: операционный UI"| ui
   ui -->|"WebSocket/HTTP: действия оператора"| operators
-  analytics -->|"Prometheus: метрики приложения"| monitoring
-  mlGateway -->|"Prometheus: метрики ML API"| monitoring
-  dataLake -->|"Prometheus: метрики хранилища"| monitoring
-  grafana -->|"HTTP (Prometheus data source)"| monitoring
+  analytics -->|"HTTP: /metrics, метрики приложения"| monitoring
+  mlGateway -->|"HTTP: /metrics, метрики ML API"| monitoring
+  dataLake -->|"HTTP: /metrics, метрики хранилища"| monitoring
+  grafana -->|"HTTP: запросы к API Prometheus"| monitoring
   operators -->|"HTTP: открытие дашбордов"| grafana
 ```
 
