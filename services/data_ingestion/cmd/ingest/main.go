@@ -10,10 +10,8 @@ import (
 	"syscall"
 
 	"data-ingestion/internal/app"
-	apperrors "data-ingestion/internal/errors"
 )
 
-// main настраивает логирование, контекст сигналов и делегирует жизненный цикл в app.Run.
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
@@ -21,7 +19,7 @@ func main() {
 	defer stop()
 
 	if err := app.Run(rootCtx); err != nil {
-		if errors.Is(err, apperrors.ErrMissingAWSCredentials) {
+		if errors.Is(err, app.ErrMissingAWSCredentials) {
 			slog.Error("set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (e.g. minioadmin)")
 			os.Exit(1)
 		}

@@ -15,9 +15,7 @@ import (
 	"data-ingestion/internal/adapters/ml"
 	"data-ingestion/internal/adapters/s3"
 	"data-ingestion/internal/config"
-	"data-ingestion/internal/constants"
 	"data-ingestion/internal/core/domain"
-	"data-ingestion/internal/utils"
 )
 
 // RunCamera в цикле подключается к RTSP, читает кадры, заливает PNG в S3 и вызывает ML process.
@@ -34,16 +32,16 @@ func RunCamera(
 	prefix := strings.Trim(s3Prefix, "/")
 	var frameNo atomic.Uint64
 	var lastUpstreamLog time.Time
-	backoff := time.Duration(constants.ReconnectBackoffSec) * time.Second
+	backoff := time.Duration(reconnectBackoffSec) * time.Second
 
 	for ctx.Err() == nil {
 		subCtx, cancel := context.WithCancel(ctx)
 		pipe, err := capture.FFmpegPipe(subCtx, ffmpegPath, cam.RTSPURL, targetFPS)
 		if err != nil {
 			metrics.OperationErrors.WithLabelValues("ffmpeg_start").Inc()
-			utils.LogSourceIssueThrottled(&lastUpstreamLog, log, "ffmpeg start (source not ready or invalid URL)", "err", err)
+			logSourceIssueThrottled(&lastUpstreamLog, log, "ffmpeg start (source not ready or invalid URL)", "err", err)
 			cancel()
-			utils.SleepBackoff(ctx, backoff)
+			sleepBackoff(ctx, backoff)
 			continue
 		}
 		sc := capture.NewScanner(pipe)
@@ -57,7 +55,7 @@ func RunCamera(
 					break
 				}
 				metrics.OperationErrors.WithLabelValues("frame_read").Inc()
-				utils.LogSourceIssueThrottled(&lastUpstreamLog, log, "frame read (stream interrupted or paused)", "err", err)
+				logSourceIssueThrottled(&lastUpstreamLog, log, "frame read (stream interrupted or paused)", "err", err)
 				break
 			}
 			n := frameNo.Add(1)
@@ -88,7 +86,7 @@ func RunCamera(
 				log.Warn("ml process", "err", err)
 			}
 
-			if n%constants.FrameLogEveryN == 0 {
+			if n%frameLogEveryN == 0 {
 				log.Info("frames", "count", n, "last_key", key)
 			}
 		}
@@ -97,7 +95,7 @@ func RunCamera(
 		if ctx.Err() != nil {
 			return
 		}
-		utils.LogSourceIssueThrottled(&lastUpstreamLog, log, "source stopped delivering frames, reconnecting", "rtsp_url", cam.RTSPURL)
-		utils.SleepBackoff(ctx, backoff)
+		logSourceIssueThrottled(&lastUpstreamLog, log, "source stopped delivering frames, reconnecting", "rtsp_url", cam.RTSPURL)
+		sleepBackoff(ctx, backoff)
 	}
 }

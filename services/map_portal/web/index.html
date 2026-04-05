@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Карта — map_portal</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    .toolbar {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.5rem 1rem; background: #1e293b; color: #f1f5f9;
+    }
+    .toolbar label { font-size: 0.875rem; }
+    .toolbar select {
+      min-width: 14rem; padding: 0.35rem 0.5rem; border-radius: 6px;
+      border: 1px solid #475569; background: #0f172a; color: #e2e8f0;
+    }
+    .toolbar .status { font-size: 0.8rem; color: #94a3b8; margin-left: auto; }
+    .attribution-bar {
+      font-size: 0.75rem; color: #94a3b8; padding: 0.25rem 1rem;
+      background: #0f172a; border-top: 1px solid #334155;
+    }
+    .attribution-bar a { color: #7dd3fc; }
+    #map { height: calc(100vh - 5.5rem); width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <label for="city">Населённый пункт</label>
+    <select id="city" aria-label="Выбор города"></select>
+    <span class="status" id="status"></span>
+  </div>
+  <div id="map"></div>
+  <div class="attribution-bar">
+    Карта: © <a href="https://www.openstreetmap.org/copyright" rel="noopener noreferrer" target="_blank">OpenStreetMap</a> contributors
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    const map = L.map("map");
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+    map.setView([58, 50], 4);
+
+    const sel = document.getElementById("city");
+    const statusEl = document.getElementById("status");
+    const stopLayer = L.layerGroup().addTo(map);
+    const busLayer = L.layerGroup().addTo(map);
+    let municipalities = [];
+    let busPollTimer = null;
+    const busMarkers = new Map();
+
+    function setStatus(t) {
+      statusEl.textContent = t || "";
+    }
+
+    async function loadMunicipalities() {
+      setStatus("Загрузка городов…");
+      const r = await fetch("/api/v1/municipalities");
+      if (!r.ok) {
+        setStatus("Ошибка загрузки городов");
+        return;
+      }
+      municipalities = await r.json();
+      sel.innerHTML = "";
+      const ph = document.createElement("option");
+      ph.value = "";
+      ph.textContent = "— Выберите город —";
+      sel.appendChild(ph);
+      for (const m of municipalities) {
+        const opt = document.createElement("option");
+        opt.value = m.municipality_id;
+        opt.textContent = m.name_ru;
+        sel.appendChild(opt);
+      }
+      setStatus("");
+    }
+
+    function clearBusPoll() {
+      if (busPollTimer) {
+        clearInterval(busPollTimer);
+        busPollTimer = null;
+      }
+    }
+
+    async function onCityChange() {
+      const mid = sel.value;
+      stopLayer.clearLayers();
+      busLayer.clearLayers();
+      busMarkers.clear();
+      clearBusPoll();
+      if (!mid) {
+        map.setView([58, 50], 4);
+        setStatus("");
+        return;
+      }
+      const m = municipalities.find((x) => x.municipality_id === mid);
+      if (m) {
+        map.setView([m.center_lat, m.center_lon], m.default_zoom);
+      }
+      setStatus("Загрузка остановок…");
+      try {
+        const sr = await fetch("/api/v1/stops?municipality_id=" + encodeURIComponent(mid));
+        if (!sr.ok) throw new Error("stops");
+        const stops = await sr.json();
+        for (const s of stops) {
+          L.circleMarker([s.lat, s.lon], { radius: 5, color: "#2563eb", weight: 2, fillOpacity: 0.75 })
+            .bindPopup((s.name_short || s.name) + "<br><small>" + (s.stop_code || "") + "</small>")
+            .addTo(stopLayer);
+        }
+      } catch (e) {
+        setStatus("Ошибка остановок");
+        return;
+      }
+
+      async function pollBuses() {
+        try {
+          const br = await fetch("/api/v1/buses?municipality_id=" + encodeURIComponent(mid));
+          if (!br.ok) return;
+          const buses = await br.json();
+          const seen = new Set();
+          for (const b of buses) {
+            seen.add(b.vehicle_id);
+            let mk = busMarkers.get(b.vehicle_id);
+            if (!mk) {
+              mk = L.circleMarker([b.lat, b.lon], {
+                radius: 9, color: "#b91c1c", weight: 2, fillColor: "#ef4444", fillOpacity: 0.9,
+              }).bindPopup(
+                "<b>" + (b.vehicle_id || "") + "</b><br>маршрут " + (b.route_id || "—") +
+                "<br><small>" + (b.observed_at_rfc3339 || "") + "</small>"
+              );
+              busMarkers.set(b.vehicle_id, mk);
+              mk.addTo(busLayer);
+            } else {
+              mk.setLatLng([b.lat, b.lon]);
+            }
+          }
+          for (const [vid, mk] of [...busMarkers.entries()]) {
+            if (!seen.has(vid)) {
+              busLayer.removeLayer(mk);
+              busMarkers.delete(vid);
+            }
+          }
+          setStatus("Автобусы: обновление каждые 5 с");
+        } catch (_) { /* ignore */ }
+      }
+
+      await pollBuses();
+      busPollTimer = setInterval(pollBuses, 5000);
+    }
+
+    sel.addEventListener("change", onCityChange);
+    loadMunicipalities().then(() => {});
+  </script>
+</body>
+</html>

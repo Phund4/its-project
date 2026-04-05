@@ -1,5 +1,4 @@
-// Package metrics регистрирует метрики Prometheus сервиса analytics.
-// Help-строки на английском.
+// Package metrics — Prometheus для analytics (Help на английском).
 package metrics
 
 import (
@@ -40,6 +39,13 @@ var (
 		prometheus.CounterOpts{
 			Name: "analytics_road_congestion_recorded_total",
 			Help: "Rows successfully inserted into ClickHouse congestion table.",
+		},
+		[]string{"segment_id", "camera_id"},
+	)
+	TelemetryIngested = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "analytics_bus_telemetry_ingested_total",
+			Help: "Ingest requests that carried a non-empty telemetry payload (not ML).",
 		},
 		[]string{"segment_id", "camera_id"},
 	)

@@ -1,5 +1,5 @@
-// Package httpadapter регистрирует HTTP-маршруты analytics.
-package httpadapter
+// Package httpx — регистрация маршрутов HTTP analytics.
+package httpx
 
 import (
 	"net/http"

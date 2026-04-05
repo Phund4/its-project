@@ -1,0 +1,21 @@
+# Режим только TELEMETRY_GRPC (камеры выключены). Дефолтный CONFIG_PATH, если не задан в .env.
+s3:
+  endpoint: "http://127.0.0.1:9000"
+  bucket: "unused"
+  prefix: "unused"
+  region: "us-east-1"
+
+ml:
+  base_url: "http://127.0.0.1:1"
+  process_path: "/v1/process"
+  timeout_seconds: 30
+
+ingest:
+  target_fps: 3
+  create_bucket_if_missing: false
+  ffmpeg_path: "ffmpeg"
+
+metrics:
+  listen_addr: ":9091"
+
+cameras: []

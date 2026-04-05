@@ -12,18 +12,21 @@ import (
 	"ml-gateway/internal/config"
 )
 
-// Forwarder пересылает проверенный JSON события дороги в analytics.
+// Forwarder пересылает JSON события дороги в analytics.
 type Forwarder struct {
-	cfg    config.Config
+	// cfg базовый URL и путь ingest.
+	cfg config.Config
+
+	// client HTTP с таймаутом.
 	client *http.Client
 }
 
-// NewForwarder собирает Forwarder с переданным HTTP-клиентом (таймауты из конфига).
+// NewForwarder создаёт Forwarder.
 func NewForwarder(cfg config.Config, client *http.Client) *Forwarder {
 	return &Forwarder{cfg: cfg, client: client}
 }
 
-// AnalyticsURL возвращает полный URL ingest или пустую строку, если analytics не настроен.
+// AnalyticsURL возвращает полный URL ingest или пустую строку.
 func (f *Forwarder) AnalyticsURL() string {
 	if f.cfg.AnalyticsBaseURL == "" {
 		return ""
@@ -31,7 +34,7 @@ func (f *Forwarder) AnalyticsURL() string {
 	return f.cfg.AnalyticsBaseURL + f.cfg.AnalyticsIngestPath
 }
 
-// Forward отправляет body без изменений в POST analytics ingest.
+// Forward отправляет body в POST analytics ingest.
 func (f *Forwarder) Forward(ctx context.Context, body []byte) error {
 	url := f.AnalyticsURL()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))

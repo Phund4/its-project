@@ -8,16 +8,24 @@ import (
 	"time"
 )
 
-// Config — параметры после Load.
+// Config параметры после Load.
 type Config struct {
-	ListenAddr          string
-	AnalyticsBaseURL    string
+	// ListenAddr адрес HTTP ml_gateway.
+	ListenAddr string
+
+	// AnalyticsBaseURL корень analytics без завершающего слэша.
+	AnalyticsBaseURL string
+
+	// AnalyticsIngestPath путь POST ingest (например /v1/ingest).
 	AnalyticsIngestPath string
-	AnalyticsTimeout    time.Duration
+
+	// AnalyticsTimeout таймаут HTTP к analytics.
+	AnalyticsTimeout time.Duration
 }
 
-// Load читает конфигурацию из переменных окружения.
+// Load читает конфигурацию из переменных окружения (после опционального .env).
 func Load() Config {
+	_ = tryLoadDotEnv()
 	c := Config{
 		ListenAddr:          ":8092",
 		AnalyticsIngestPath: "/v1/ingest",

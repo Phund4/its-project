@@ -174,6 +174,21 @@ services:
     networks:
       - its
 
+  # Генератор телеметрии автобуса: gRPC на хост, где вручную запущен data_ingestion (:50051).
+  bus-telemetry-generator:
+    profiles:
+      - telemetry
+    build:
+      context: ..
+      dockerfile: data_generators/bus_telemetry/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      BUS_TELEMETRY_GRPC_ADDR: host.docker.internal:50051
+      BUS_TELEMETRY_ALL_CITIES: "true"
+    networks:
+      - its
+
   prometheus:
     image: prom/prometheus:v2.55.1
     hostname: prometheus

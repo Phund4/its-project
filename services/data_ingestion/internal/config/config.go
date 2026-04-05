@@ -5,46 +5,85 @@ import (
 	"fmt"
 	"os"
 
-	"data-ingestion/internal/utils"
-
 	"gopkg.in/yaml.v3"
 )
 
+// S3 параметры объектного хранилища (MinIO-совместимый endpoint).
 type S3 struct {
+	// Endpoint URL API S3 без завершающего слэша.
 	Endpoint string `yaml:"endpoint"`
-	Bucket   string `yaml:"bucket"`
-	Prefix   string `yaml:"prefix"`
-	Region   string `yaml:"region"`
+
+	// Bucket имя бакета для кадров.
+	Bucket string `yaml:"bucket"`
+
+	// Prefix необязательный префикс ключей.
+	Prefix string `yaml:"prefix"`
+
+	// Region регион для подписи запросов AWS SDK.
+	Region string `yaml:"region"`
 }
 
+// ML HTTP-сервис инференса по кадру.
 type ML struct {
-	BaseURL        string `yaml:"base_url"`
-	ProcessPath    string `yaml:"process_path"`
-	TimeoutSeconds int    `yaml:"timeout_seconds"`
+	// BaseURL корень сервиса ML.
+	BaseURL string `yaml:"base_url"`
+
+	// ProcessPath путь multipart-обработки (например /v1/process).
+	ProcessPath string `yaml:"process_path"`
+
+	// TimeoutSeconds таймаут HTTP-запроса к ML.
+	TimeoutSeconds int `yaml:"timeout_seconds"`
 }
 
+// Ingest поведение захвата и выгрузки кадров.
 type Ingest struct {
-	TargetFPS             float64 `yaml:"target_fps"`
-	CreateBucketIfMissing bool    `yaml:"create_bucket_if_missing"`
-	FFmpegPath            string  `yaml:"ffmpeg_path"`
+	// TargetFPS целевой FPS для ffmpeg при дискретизации потока.
+	TargetFPS float64 `yaml:"target_fps"`
+
+	// CreateBucketIfMissing создать bucket при старте, если нет.
+	CreateBucketIfMissing bool `yaml:"create_bucket_if_missing"`
+
+	// FFmpegPath исполняемый файл ffmpeg.
+	FFmpegPath string `yaml:"ffmpeg_path"`
 }
 
+// Metrics экспорт Prometheus.
 type Metrics struct {
+	// ListenAddr адрес HTTP :port для /metrics.
 	ListenAddr string `yaml:"listen_addr"`
 }
 
+// Camera один RTSP-источник в конфиге.
 type Camera struct {
+	// SegmentID сегмент дороги для метаданных и analytics.
 	SegmentID string `yaml:"segment_id"`
-	CameraID  string `yaml:"camera_id"`
-	RTSPURL   string `yaml:"rtsp_url"`
+
+	// CameraID идентификатор камеры.
+	CameraID string `yaml:"camera_id"`
+
+	// RTSPURL URL потока для ffmpeg.
+	RTSPURL string `yaml:"rtsp_url"`
 }
 
+// Root корневая конфигурация YAML.
 type Root struct {
-	S3      S3       `yaml:"s3"`
-	ML      ML       `yaml:"ml"`
-	Ingest  Ingest   `yaml:"ingest"`
-	Metrics Metrics  `yaml:"metrics"`
+	// S3 настройки хранилища.
+	S3 S3 `yaml:"s3"`
+
+	// ML настройки сервиса обработки кадров.
+	ML ML `yaml:"ml"`
+
+	// Ingest параметры пайплайна кадров.
+	Ingest Ingest `yaml:"ingest"`
+
+	// Metrics адрес метрик.
+	Metrics Metrics `yaml:"metrics"`
+
+	// Cameras список камер (контур RTSP).
 	Cameras []Camera `yaml:"cameras"`
+
+	// ConfigFile путь к загруженному YAML (не из файла).
+	ConfigFile string `yaml:"-"`
 }
 
 // Load читает YAML по пути path, парсит и валидирует структуру Root.
@@ -57,39 +96,62 @@ func Load(path string) (*Root, error) {
 	if err := yaml.Unmarshal(b, &c); err != nil {
 		return nil, fmt.Errorf("yaml: %w", err)
 	}
-	if err := c.validate(); err != nil {
+	c.ConfigFile = path
+	ApplyEnvOverrides(&c)
+	f := FeaturesFromEnv()
+	if err := c.validate(&f); err != nil {
 		return nil, err
 	}
 	return &c, nil
 }
 
-// LoadFromEnv подгружает .env (ENV_FILE или .env), затем читает CONFIG_PATH или config.yaml.
+// LoadFromEnv подгружает .env (ENV_FILE или .env), затем CONFIG_PATH или config.telemetry.yaml по умолчанию.
 func LoadFromEnv() (*Root, error) {
 	envPath := os.Getenv("ENV_FILE")
 	if envPath == "" {
 		envPath = ".env"
 	}
-	if err := utils.LoadDotEnv(envPath); err != nil {
+	if err := tryLoadDotEnv(); err != nil {
 		return nil, err
 	}
 
 	p := os.Getenv("CONFIG_PATH")
 	if p == "" {
-		p = "config.yaml"
+		p = "config.telemetry.yaml"
 	}
 	return Load(p)
 }
 
-// validate проверяет обязательные поля и подставляет значения по умолчанию.
-func (c *Root) validate() error {
-	if c.S3.Endpoint == "" {
-		return fmt.Errorf("s3.endpoint is required")
+// validate проверяет обязательные поля с учётом фиче-флагов и подставляет значения по умолчанию.
+func (c *Root) validate(f *Features) error {
+	if f == nil {
+		def := FeaturesFromEnv()
+		f = &def
 	}
-	if c.S3.Bucket == "" {
-		return fmt.Errorf("s3.bucket is required")
+	if !f.CamerasEnabled && !f.TelemetryGRPC {
+		return fmt.Errorf("включите CAMERAS_ENABLED и/или TELEMETRY_GRPC_ENABLED")
 	}
-	if c.ML.BaseURL == "" {
-		return fmt.Errorf("ml.base_url is required")
+	if f.CamerasEnabled {
+		if !f.S3Enabled || !f.MLEnabled {
+			return fmt.Errorf("контур камер требует S3_ENABLED=true и ML_ENABLED=true")
+		}
+		if c.S3.Endpoint == "" {
+			return fmt.Errorf("s3.endpoint is required when CAMERAS_ENABLED")
+		}
+		if c.S3.Bucket == "" {
+			return fmt.Errorf("s3.bucket is required when CAMERAS_ENABLED")
+		}
+		if c.ML.BaseURL == "" {
+			return fmt.Errorf("ml.base_url is required when CAMERAS_ENABLED")
+		}
+		if len(c.Cameras) == 0 {
+			return fmt.Errorf("cameras: нужен хотя бы один источник; для списка RTSP укажите CONFIG_PATH=./config.cameras.yaml")
+		}
+		for i, cam := range c.Cameras {
+			if cam.SegmentID == "" || cam.CameraID == "" || cam.RTSPURL == "" {
+				return fmt.Errorf("cameras[%d]: segment_id, camera_id, rtsp_url are required", i)
+			}
+		}
 	}
 	if c.ML.ProcessPath == "" {
 		c.ML.ProcessPath = "/v1/process"
@@ -108,14 +170,6 @@ func (c *Root) validate() error {
 	}
 	if c.S3.Region == "" {
 		c.S3.Region = "us-east-1"
-	}
-	if len(c.Cameras) == 0 {
-		return fmt.Errorf("cameras: at least one camera is required")
-	}
-	for i, cam := range c.Cameras {
-		if cam.SegmentID == "" || cam.CameraID == "" || cam.RTSPURL == "" {
-			return fmt.Errorf("cameras[%d]: segment_id, camera_id, rtsp_url are required", i)
-		}
 	}
 	return nil
 }

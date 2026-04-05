@@ -1,4 +1,4 @@
-// Package metrics — Prometheus для ml_gateway (Help на английском).
+// Package metrics — Prometheus для ml_gateway.
 package metrics
 
 import (

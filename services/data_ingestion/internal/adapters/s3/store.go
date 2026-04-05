@@ -14,9 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// Client — обёртка над S3 API (MinIO-совместимый endpoint).
+// Client обёртка над S3 API (MinIO-совместимый endpoint).
 type Client struct {
-	api    *s3.Client
+	// api SDK-клиент с настроенным BaseEndpoint.
+	api *s3.Client
+
+	// bucket имя бакета по умолчанию для Put/Get.
 	bucket string
 }
 

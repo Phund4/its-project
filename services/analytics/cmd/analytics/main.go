@@ -11,7 +11,6 @@ import (
 	"traffic-analytics/internal/app"
 )
 
-// main настраивает логирование, контекст ОС и передаёт управление app.Run.
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 

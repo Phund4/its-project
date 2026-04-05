@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package map.v1;
+
+option go_package = "traffic-analytics/api/map/v1;mapv1";
+
+// Данные для map_portal: справочники из CH и автобусы в памяти analytics.
+service MapPortal {
+  rpc ListMunicipalities(ListMunicipalitiesRequest) returns (ListMunicipalitiesResponse);
+  rpc ListStops(ListStopsRequest) returns (ListStopsResponse);
+  rpc ListBuses(ListBusesRequest) returns (ListBusesResponse);
+}
+
+message ListMunicipalitiesRequest {}
+
+message Municipality {
+  string municipality_id = 1;
+  string name_ru = 2;
+  double center_lat = 3;
+  double center_lon = 4;
+  uint32 default_zoom = 5;
+}
+
+message ListMunicipalitiesResponse {
+  repeated Municipality items = 1;
+}
+
+message ListStopsRequest {
+  string municipality_id = 1;
+}
+
+message Stop {
+  string stop_id = 1;
+  string stop_code = 2;
+  string name = 3;
+  string name_short = 4;
+  double lat = 5;
+  double lon = 6;
+}
+
+message ListStopsResponse {
+  repeated Stop items = 1;
+}
+
+message ListBusesRequest {
+  string municipality_id = 1;
+}
+
+message Bus {
+  string vehicle_id = 1;
+  string route_id = 2;
+  double lat = 3;
+  double lon = 4;
+  double speed_kmh = 5;
+  double heading_deg = 6;
+  string observed_at_rfc3339 = 7;
+}
+
+message ListBusesResponse {
+  repeated Bus items = 1;
+}

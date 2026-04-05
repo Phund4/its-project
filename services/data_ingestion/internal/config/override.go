@@ -20,3 +20,16 @@ func ApplyEnvOverrides(c *Root) {
 		c.Metrics.ListenAddr = v
 	}
 }
+
+// TelemetryListenAddrFromEnv — адрес gRPC-сервера телеметрии (по умолчанию :50051).
+func TelemetryListenAddrFromEnv() string {
+	if v := strings.TrimSpace(os.Getenv("TELEMETRY_GRPC_LISTEN_ADDR")); v != "" {
+		return v
+	}
+	return ":50051"
+}
+
+// AnalyticsIngestURLFromEnv — полный URL POST /v1/ingest (обязателен при TELEMETRY_GRPC_ENABLED).
+func AnalyticsIngestURLFromEnv() string {
+	return strings.TrimRight(strings.TrimSpace(os.Getenv("ANALYTICS_INGEST_URL")), "/")
+}

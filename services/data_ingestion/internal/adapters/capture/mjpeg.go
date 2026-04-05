@@ -5,16 +5,21 @@ import (
 	"context"
 	"io"
 	"sync"
-
-	"data-ingestion/internal/constants"
 )
 
 // Scanner извлекает последовательные JPEG-кадры из MJPEG-потока (например, ffmpeg image2pipe).
 type Scanner struct {
-	mu  sync.Mutex
-	r   io.Reader
+	// mu сериализация ReadFrame.
+	mu sync.Mutex
+
+	// r источник байт (stdout ffmpeg).
+	r io.Reader
+
+	// buf накопитель между границами JPEG.
 	buf []byte
-	tmp [constants.MJPEGScannerChunk]byte
+
+	// tmp буфер для чтения чанками из r.
+	tmp [mjpegScannerChunk]byte
 }
 
 // NewScanner создаёт сканер поверх произвольного io.Reader.
@@ -24,20 +29,24 @@ func NewScanner(r io.Reader) *Scanner {
 
 // ReadFrameCtx читает следующий кадр; отменяется при отмене ctx (shutdown, переподключение).
 func (s *Scanner) ReadFrameCtx(ctx context.Context) ([]byte, error) {
-	type result struct {
-		b   []byte
+	type readFrameResult struct {
+		// b прочитанный JPEG или nil при ошибке.
+		b []byte
+
+		// err ошибка ReadFrame.
 		err error
 	}
-	ch := make(chan result, 1)
+
+	ch := make(chan readFrameResult, 1)
 	go func() {
 		b, err := s.ReadFrame()
-		ch <- result{b, err}
+		ch <- readFrameResult{b: b, err: err}
 	}()
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case r := <-ch:
-		return r.b, r.err
+	case res := <-ch:
+		return res.b, res.err
 	}
 }
 
@@ -47,9 +56,8 @@ func (s *Scanner) ReadFrame() ([]byte, error) {
 	defer s.mu.Unlock()
 	soi := []byte{0xff, 0xd8}
 	eoi := []byte{0xff, 0xd9}
-	maxJPEG := constants.MaxJPEGSize
 
-	for len(s.buf) < maxJPEG {
+	for len(s.buf) < maxJPEGSize {
 		idx := bytes.Index(s.buf, soi)
 		if idx < 0 {
 			if len(s.buf) > 65536 {

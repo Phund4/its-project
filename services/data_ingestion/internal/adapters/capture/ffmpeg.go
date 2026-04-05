@@ -45,8 +45,11 @@ func FFmpegPipe(ctx context.Context, ffmpegPath, inputURL string, fps float64) (
 }
 
 type ffmpegReader struct {
+	// stdout pipe stdout процесса ffmpeg.
 	stdout io.ReadCloser
-	cmd    *exec.Cmd
+
+	// cmd запущенная команда для Wait при Close.
+	cmd *exec.Cmd
 }
 
 // Read читает байты из stdout процесса ffmpeg.

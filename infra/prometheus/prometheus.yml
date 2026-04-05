@@ -1,3 +1,6 @@
+# Prometheus крутится в Docker; цели ниже — процессы на хосте (не контейнеры приложений).
+# host.docker.internal задан в compose для prometheus (extra_hosts). Если сервис не запущен — target в DOWN, это нормально.
+# Для полностью локального Prometheus без Docker замените targets на 127.0.0.1.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s

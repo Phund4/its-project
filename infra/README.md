@@ -36,9 +36,11 @@ docker compose down
 
   Пример `clickhouse-client` с хоста: `clickhouse-client --host localhost --port 9000`.
 
+  **Имитационный справочник** (отдельная БД `its_infra_sim`, не `default`): таблицы `municipalities`, `bus_stops`, `bus_stop_routes`. После `docker compose up -d clickhouse` выполните `infra/clickhouse/bootstrap.sh` (нужен `clickhouse-client` на хосте или Docker compose). Скрипты: [`clickhouse/001_schema.sql`](clickhouse/001_schema.sql), [`clickhouse/002_seed.sql`](clickhouse/002_seed.sql). Проверка: `clickhouse-client -q "SELECT count() FROM its_infra_sim.municipalities"` и `SELECT count() FROM its_infra_sim.bus_stops`.
+
 - **MinIO (S3)** — API с хоста: `http://localhost:9050`; консоль: http://localhost:9051. Учётные данные: **`minioadmin` / `minioadmin`**. Внутри сети: endpoint `http://minio:9000`.
 
-- **Prometheus** — http://localhost:9090. Скрейп с хоста (если процессы запущены): **`data_ingestion`** `:9091`, **`ml_gateway`** `:8092`, **`analytics`** `:8093` (через `host.docker.internal`; на Linux у Prometheus задан `extra_hosts`). Примеры метрик: `data_ingestion_operation_errors_total`, `ml_gateway_operation_errors_total`, `analytics_road_*`, `analytics_clickhouse_errors_total`, `analytics_ingest_errors_total`. Для разработки **телеметрии** метрики `:9091` не обязательны — поднимайте только нужные таргеты и свой сервис с `/metrics`.
+- **Prometheus** — http://localhost:9090. Конфиг [`prometheus/prometheus.yml`](prometheus/prometheus.yml) опрашивает **процессы на хосте** (`data_ingestion` :9091, `ml_gateway` :8092, `analytics` :8093) через **`host.docker.internal`** (у сервиса `prometheus` задан `extra_hosts`). Это только мониторинг: сами Go-сервисы **не** зависят от Docker. Нет процесса — таргет будет DOWN. Метрики: `data_ingestion_*`, `ml_gateway_*`, `analytics_*` и т.д.
 
 - **Grafana** — http://localhost:3000, логин по умолчанию **`admin` / `admin`**. Провижининг из [`grafana/provisioning/`](grafana/provisioning/) (папка дашбордов **Traffic**); созданные вручную дашборды и источники сохраняются в томе **`grafana-data`**.
 
@@ -46,8 +48,18 @@ docker compose down
 
 - **video-source-sim** (профиль `ingest`) — читает `../.data/videos/*.mp4`; при отсутствии файлов — синтетические потоки.
 
+- **bus-telemetry-generator** (профиль **`telemetry`**) — контейнер-генератор: раз в **5 с** шлёт gRPC на **`host.docker.internal:50051`** (на хосте должны быть запущены **`data_ingestion`** с `TELEMETRY_GRPC_ENABLED=true` и **`analytics`**). См. [`services/data_ingestion/README.md`](../services/data_ingestion/README.md).
+
+Профили **`ingest`** (MediaMTX + видео-симулятор) и **`telemetry`** (только генератор автобуса) заданы отдельно. Примеры из каталога `infra`:
+
+```bash
+docker compose --profile ingest up -d mediamtx video-source-sim
+docker compose --profile telemetry up -d bus-telemetry-generator
+docker compose --profile ingest --profile telemetry up -d
+```
+
 ## Приложения вне compose
 
-Вручную (см. `.env` в каталогах сервисов): **analytics** ([`services/analytics`](../services/analytics/README.md)), **ml_gateway** ([`services/ml_gateway`](../services/ml_gateway/README.md)), **ml_experiments**, опционально **`data_ingestion`** — только для **видео** ([`services/data_ingestion`](../services/data_ingestion/README.md)). Для видео-цепочки порядок: ClickHouse → **analytics** → **ml_gateway** → **ml_experiments** → **`data_ingestion`**; `ANALYTICS_BASE_URL=http://127.0.0.1:8093`. Телеметрия может жить отдельно без этих шагов.
+**analytics**, **`data_ingestion`**, **ml_gateway**, **map_portal** (карта HTTP **8096**, к analytics по gRPC **8097** — см. `MAP_GRPC_LISTEN_ADDR` / `ANALYTICS_GRPC_ADDR`), **ml_experiments** запускаются вручную из консоли (см. `.env` в каталогах сервисов): [`services/analytics`](../services/analytics/README.md), [`services/data_ingestion`](../services/data_ingestion/README.md), [`services/ml_gateway`](../services/ml_gateway/README.md), [`services/map_portal`](../services/map_portal/README.md). Для видео: ClickHouse → **analytics** → **ml_gateway** → **ml_experiments** → **`data_ingestion`**. Для телеметрии автобуса: **analytics** + **`data_ingestion`** (режим gRPC, `ANALYTICS_INGEST_URL=http://127.0.0.1:8093/v1/ingest`), затем при необходимости **`docker compose --profile telemetry up -d bus-telemetry-generator`**.
 
 Тома данных Compose (список имён): `zookeeper-data`, `kafka-data`, `es-data`, `clickhouse-data`, `minio-data`, `prometheus-data`, `grafana-data`.

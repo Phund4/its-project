@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package bus.v1;
+
+option go_package = "data-ingestion/api/bus/v1;busv1";
+
+// BusTelemetry — периодическая телеметрия ТС (не ML).
+message BusTelemetry {
+  string segment_id = 1;
+  string vehicle_id = 2;
+  string route_id = 3;
+  double lat = 4;
+  double lon = 5;
+  double speed_kmh = 6;
+  double heading_deg = 7;
+  string observed_at_rfc3339 = 8;
+  // Код города для карты и map_portal (msk, spb, kzn, ekb).
+  string municipality_id = 9;
+}
+
+message SendBusTelemetryResponse {}
+
+service BusTelemetryService {
+  rpc SendBusTelemetry(BusTelemetry) returns (SendBusTelemetryResponse);
+}

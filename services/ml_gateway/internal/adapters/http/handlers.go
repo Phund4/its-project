@@ -1,5 +1,5 @@
-// Package httpadapter — маршруты ml_gateway.
-package httpadapter
+// Package httpx — HTTP-маршруты ml_gateway.
+package httpx
 
 import (
 	"context"
@@ -9,15 +9,30 @@ import (
 	"strings"
 
 	"ml-gateway/internal/adapters/metrics"
-	"ml-gateway/internal/constants"
 	"ml-gateway/internal/core/domain"
 	"ml-gateway/internal/core/services"
-	"ml-gateway/internal/utils"
 )
+
+const maxRoadEventBodyBytes = 8 << 20
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok\n"))
+}
+
+func withAppShutdown(req, app context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(req)
+	if app == nil {
+		return ctx, cancel
+	}
+	go func() {
+		select {
+		case <-app.Done():
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
 }
 
 func roadEventsHandler(fwd *services.Forwarder, appCtx context.Context) http.HandlerFunc {
@@ -28,7 +43,7 @@ func roadEventsHandler(fwd *services.Forwarder, appCtx context.Context) http.Han
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, constants.MaxRoadEventBodyBytes))
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxRoadEventBodyBytes))
 		if err != nil {
 			metrics.OperationErrors.WithLabelValues("post_decode").Inc()
 			http.Error(w, "read body", http.StatusBadRequest)
@@ -51,7 +66,7 @@ func roadEventsHandler(fwd *services.Forwarder, appCtx context.Context) http.Han
 			return
 		}
 
-		fwdCtx, fwdCancel := utils.WithAppShutdown(r.Context(), appCtx)
+		fwdCtx, fwdCancel := withAppShutdown(r.Context(), appCtx)
 		defer fwdCancel()
 		if err := fwd.Forward(fwdCtx, body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
@@ -61,7 +76,7 @@ func roadEventsHandler(fwd *services.Forwarder, appCtx context.Context) http.Han
 	}
 }
 
-// Register вешает POST /v1/road-events, GET /health и монтирует /metrics снаружи (в app.Run).
+// Register монтирует маршруты (без /metrics — его вешает app).
 func Register(mux *http.ServeMux, fwd *services.Forwarder, appCtx context.Context) {
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("POST /v1/road-events", roadEventsHandler(fwd, appCtx))

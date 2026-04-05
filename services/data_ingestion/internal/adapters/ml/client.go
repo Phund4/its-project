@@ -13,11 +13,16 @@ import (
 	"data-ingestion/internal/core/domain"
 )
 
-// Client — HTTP-клиент к сервису машинного обучения.
+// Client HTTP-клиент к сервису машинного обучения.
 type Client struct {
-	base        string
+	// base корневой URL ML без завершающего слэша.
+	base string
+
+	// processPath путь POST multipart (например /v1/process).
 	processPath string
-	cli         *http.Client
+
+	// cli HTTP с таймаутом из конструктора.
+	cli *http.Client
 }
 
 // New создаёт клиент с baseURL, путём process и таймаутом HTTP.

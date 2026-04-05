@@ -1,0 +1,34 @@
+# Контур видео: список камер, сегменты и RTSP только здесь.
+# Запуск: CONFIG_PATH=./config.cameras.yaml CAMERAS_ENABLED=true (и ключи S3 в .env).
+s3:
+  endpoint: "http://localhost:9050"
+  bucket: "its-frames"
+  prefix: "its-ingest"
+  region: "us-east-1"
+
+ml:
+  base_url: "http://127.0.0.1:8000"
+  process_path: "/v1/process"
+  timeout_seconds: 30
+
+ingest:
+  target_fps: 5
+  create_bucket_if_missing: true
+  ffmpeg_path: "ffmpeg"
+
+metrics:
+  listen_addr: ":9091"
+
+cameras:
+  - segment_id: "ring-road-5"
+    camera_id: "cam-01"
+    rtsp_url: "rtsp://localhost:8554/cam-01"
+  - segment_id: "ring-road-5"
+    camera_id: "cam-02"
+    rtsp_url: "rtsp://localhost:8554/cam-02"
+  - segment_id: "ring-road-5"
+    camera_id: "cam-03"
+    rtsp_url: "rtsp://localhost:8554/cam-03"
+  - segment_id: "ring-road-5"
+    camera_id: "cam-04"
+    rtsp_url: "rtsp://localhost:8554/cam-04"
