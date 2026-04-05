@@ -20,7 +20,7 @@
           "p50_ms": 16.822875000798376,
           "p95_ms": 23.06450000105542,
           "fps": 57.7987023212655,
-          "checkpoint": "ml_experiments/artifacts/accident/baseline_cnn/best.pt",
+          "checkpoint": "ml-experiments/artifacts/accident/baseline-cnn/best.pt",
           "crash_class_index": 0,
           "normal_class_index": 1
         },
@@ -36,7 +36,7 @@
           "p50_ms": 109.6747499977937,
           "p95_ms": 120.20070799917448,
           "fps": 9.238978537955528,
-          "checkpoint": "ml_experiments/artifacts/accident/resnet18/best.pt",
+          "checkpoint": "ml-experiments/artifacts/accident/resnet18/best.pt",
           "crash_class_index": 0,
           "normal_class_index": 1
         }
@@ -53,7 +53,7 @@
           "p50_ms": 17.894000000524102,
           "p95_ms": 18.556458002422005,
           "fps": 56.12109279534595,
-          "checkpoint": "ml_experiments/artifacts/congestion/tiny_cnn/best.pt"
+          "checkpoint": "ml-experiments/artifacts/congestion/tiny-cnn/best.pt"
         },
         "linear_resnet": {
           "mae": 0.19757653330160485,
@@ -63,7 +63,7 @@
           "p50_ms": 109.5406250024098,
           "p95_ms": 130.30829199851723,
           "fps": 8.759334224668875,
-          "checkpoint": "ml_experiments/artifacts/congestion/linear_resnet/best.pt"
+          "checkpoint": "ml-experiments/artifacts/congestion/linear-resnet/best.pt"
         }
       },
       "winner": "tiny_cnn"

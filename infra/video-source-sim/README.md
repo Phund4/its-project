@@ -1,4 +1,4 @@
-# video_source_sim
+# video-source-sim
 
 Сервис-имитатор источников камер. Берёт `.mp4` из каталога **`../.data/videos`** (в compose монтируется как **`/videos`**) и публикует **четыре** RTSP-потока в MediaMTX:
 

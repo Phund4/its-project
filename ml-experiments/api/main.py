@@ -59,8 +59,8 @@ def _congestion_interval_sec() -> float:
 def startup() -> None:
     """Загружает чекпойнты ДТП и загруженности при старте приложения."""
     global _acc_model, _acc_img, _acc_tf, _crash_idx, _cong_model, _cong_img, _cong_tf
-    acc_path = Path(os.environ.get("ACCIDENT_CKPT", ROOT / "artifacts" / "accident" / "baseline_cnn" / "best.pt"))
-    cong_path = Path(os.environ.get("CONGESTION_CKPT", ROOT / "artifacts" / "congestion" / "tiny_cnn" / "best.pt"))
+    acc_path = Path(os.environ.get("ACCIDENT_CKPT", ROOT / "artifacts" / "accident" / "baseline-cnn" / "best.pt"))
+    cong_path = Path(os.environ.get("CONGESTION_CKPT", ROOT / "artifacts" / "congestion" / "tiny-cnn" / "best.pt"))
     if acc_path.is_file():
         _acc_model, _acc_img, meta = load_checkpoint_auto(acc_path)
         _acc_tf = make_transform(_acc_img)

@@ -17,6 +17,11 @@ from torchvision import models, transforms
 ROOT = Path(__file__).resolve().parent
 
 
+def artifact_subdir(model_name: str) -> str:
+    """Имя подкаталога в artifacts/ (в репозитории — с дефисами вместо подчёркиваний)."""
+    return model_name.replace("_", "-")
+
+
 class SmallCNN(nn.Module):
     def __init__(self, num_classes: int = 2):
         super().__init__()
@@ -167,7 +172,7 @@ def eval_congestion(model: nn.Module, loader: DataLoader) -> dict:
 def evaluate_congestion_models(data_dir: Path, artifacts_dir: Path, batch_size: int) -> dict:
     out: dict[str, dict] = {}
     for model_name in ("tiny_cnn", "linear_resnet"):
-        ckpt_path = artifacts_dir / model_name / "best.pt"
+        ckpt_path = artifacts_dir / artifact_subdir(model_name) / "best.pt"
         if not ckpt_path.is_file():
             raise SystemExit(f"missing checkpoint: {ckpt_path}")
         model, img_size, _ = load_checkpoint(ckpt_path, "congestion")

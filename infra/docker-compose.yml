@@ -160,7 +160,7 @@ services:
     profiles:
       - ingest
     build:
-      context: ./video_source_sim
+      context: ./video-source-sim
       dockerfile: Dockerfile
     environment:
       RTSP_PUBLISH_BASE: rtsp://mediamtx:8554
@@ -174,13 +174,13 @@ services:
     networks:
       - its
 
-  # Генератор телеметрии автобуса: gRPC на хост, где вручную запущен data_ingestion (:50051).
+  # Генератор телеметрии автобуса: gRPC на хост, где вручную запущен data-ingestion (:50051).
   bus-telemetry-generator:
     profiles:
       - telemetry
     build:
       context: ..
-      dockerfile: data_generators/bus_telemetry/Dockerfile
+      dockerfile: data-generators/bus-telemetry/Dockerfile
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:

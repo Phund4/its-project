@@ -4,12 +4,12 @@
 
 Нужны чекпойнты и видео:
 
-- `artifacts/accident/{baseline_cnn,resnet18}/best.pt`
-- `artifacts/congestion/{tiny_cnn,linear_resnet}/best.pt`
+- `artifacts/accident/{baseline-cnn,resnet18}/best.pt`
+- `artifacts/congestion/{tiny-cnn,linear-resnet}/best.pt`
 - один или несколько `*.mp4` в `../.data/videos/` (корень репозитория)
 
 ```bash
-cd ml_experiments
+cd ml-experiments
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -27,14 +27,14 @@ bash scripts/run_pipeline.sh
 ## Mock ML API
 
 ```bash
-cd ml_experiments
+cd ml-experiments
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --no-access-log
 ```
 
-Переменные читаются из **`.env`** в каталоге `ml_experiments` (или из **`ENV_FILE`**). Файл **`.env`** в git не коммитится (после клона создайте его заново: `ACCIDENT_CKPT`, `CONGESTION_CKPT`, при необходимости `ML_GATEWAY_URL` и т.д.). Уже заданные в оболочке переменные **не перезаписываются** значениями из файла.
+Переменные читаются из **`.env`** в каталоге `ml-experiments` (или из **`ENV_FILE`**). Файл **`.env`** в git не коммитится (после клона создайте его заново: `ACCIDENT_CKPT`, `CONGESTION_CKPT`, при необходимости `ML_GATEWAY_URL` и т.д.). Уже заданные в оболочке переменные **не перезаписываются** значениями из файла.
 
 **Интервал модели загруженности:** при вызове `/v1/process` с полями `segment_id` и `camera_id` инференс **загруженности** выполняется не чаще чем раз в **`CONGESTION_INTERVAL_SEC`** (секунды, по умолчанию **2**) на каждую камеру; классификация **инцидента** считается **на каждый** кадр. Для локального JSON без `segment_id`/`camera_id` загруженность не кэшируется по интервалу. В `/health` отдаётся `congestion_interval_sec`.
 

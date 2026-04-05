@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild ml_experiments/data from local videos (frames only, no labels)."""
+"""Rebuild ml-experiments/data from local videos (frames only, no labels)."""
 
 from __future__ import annotations
 

@@ -7,9 +7,9 @@ venv/
 __pycache__/
 *.py[cod]
 .DS_Store
-ml_experiments/data/
-ml_experiments/artifacts/
-ml_experiments/.mplconfig/
+ml-experiments/data/
+ml-experiments/artifacts/
+ml-experiments/.mplconfig/
 .data/
 *.onnx
 !**/.gitkeep

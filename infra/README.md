@@ -48,7 +48,7 @@ docker compose down
 
 - **video-source-sim** (профиль `ingest`) — читает `../.data/videos/*.mp4`; при отсутствии файлов — синтетические потоки.
 
-- **bus-telemetry-generator** (профиль **`telemetry`**) — контейнер-генератор: раз в **5 с** шлёт gRPC на **`host.docker.internal:50051`** (на хосте должны быть запущены **`data_ingestion`** с `TELEMETRY_GRPC_ENABLED=true` и **`analytics`**). См. [`services/data_ingestion/README.md`](../services/data_ingestion/README.md).
+- **bus-telemetry-generator** (профиль **`telemetry`**) — контейнер-генератор: раз в **5 с** шлёт gRPC на **`host.docker.internal:50051`** (на хосте должны быть запущены **`data_ingestion`** с `TELEMETRY_GRPC_ENABLED=true` и **`analytics`**). См. [`services/data-ingestion/README.md`](../services/data-ingestion/README.md).
 
 Профили **`ingest`** (MediaMTX + видео-симулятор) и **`telemetry`** (только генератор автобуса) заданы отдельно. Примеры из каталога `infra`:
 
@@ -60,6 +60,6 @@ docker compose --profile ingest --profile telemetry up -d
 
 ## Приложения вне compose
 
-**analytics**, **`data_ingestion`**, **ml_gateway**, **map_portal** (карта HTTP **8096**, к analytics по gRPC **8097** — см. `MAP_GRPC_LISTEN_ADDR` / `ANALYTICS_GRPC_ADDR`), **ml_experiments** запускаются вручную из консоли (см. `.env` в каталогах сервисов): [`services/analytics`](../services/analytics/README.md), [`services/data_ingestion`](../services/data_ingestion/README.md), [`services/ml_gateway`](../services/ml_gateway/README.md), [`services/map_portal`](../services/map_portal/README.md). Для видео: ClickHouse → **analytics** → **ml_gateway** → **ml_experiments** → **`data_ingestion`**. Для телеметрии автобуса: **analytics** + **`data_ingestion`** (режим gRPC, `ANALYTICS_INGEST_URL=http://127.0.0.1:8093/v1/ingest`), затем при необходимости **`docker compose --profile telemetry up -d bus-telemetry-generator`**.
+**analytics**, **data-ingestion**, **ml-gateway**, **map-portal** (карта HTTP **8096**, к analytics по gRPC **8097** — см. `MAP_GRPC_LISTEN_ADDR` / `ANALYTICS_GRPC_ADDR`), **ml-experiments** запускаются вручную из консоли (см. `.env` в каталогах сервисов): [`services/analytics`](../services/analytics/README.md), [`services/data-ingestion`](../services/data-ingestion/README.md), [`services/ml-gateway`](../services/ml-gateway/README.md), [`services/map-portal`](../services/map-portal/README.md). Для видео: ClickHouse → **analytics** → **ml-gateway** → **ml-experiments** → **data-ingestion**. Для телеметрии автобуса: **analytics** + **data-ingestion** (режим gRPC, `ANALYTICS_INGEST_URL=http://127.0.0.1:8093/v1/ingest`), затем при необходимости **`docker compose --profile telemetry up -d bus-telemetry-generator`**.
 
 Тома данных Compose (список имён): `zookeeper-data`, `kafka-data`, `es-data`, `clickhouse-data`, `minio-data`, `prometheus-data`, `grafana-data`.

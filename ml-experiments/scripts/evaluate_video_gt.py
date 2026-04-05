@@ -16,7 +16,13 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from inference_core import evaluate_congestion_models, load_checkpoint, make_transform, summarize_latency
+from inference_core import (
+    artifact_subdir,
+    evaluate_congestion_models,
+    load_checkpoint,
+    make_transform,
+    summarize_latency,
+)
 
 
 class AllNormalImageDataset(Dataset):
@@ -72,7 +78,7 @@ def eval_accident_video_gt(model: torch.nn.Module, loader: DataLoader, crash_idx
 def evaluate_accident_video_gt(data_dir: Path, artifacts_dir: Path, batch_size: int) -> dict:
     out: dict[str, dict] = {}
     for model_name in ("baseline_cnn", "resnet18"):
-        ckpt_path = artifacts_dir / model_name / "best.pt"
+        ckpt_path = artifacts_dir / artifact_subdir(model_name) / "best.pt"
         if not ckpt_path.is_file():
             raise SystemExit(f"missing checkpoint: {ckpt_path}")
         model, img_size, meta = load_checkpoint(ckpt_path, "accident")
@@ -111,8 +117,8 @@ def pick_congestion_winner_video_gt(results: dict[str, dict]) -> str:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--accident-data", type=Path, default=ROOT / "data" / "accident" / "video_gt" / "images")
-    p.add_argument("--congestion-data", type=Path, default=ROOT / "data" / "congestion" / "video_gt")
+    p.add_argument("--accident-data", type=Path, default=ROOT / "data" / "accident" / "video-gt" / "images")
+    p.add_argument("--congestion-data", type=Path, default=ROOT / "data" / "congestion" / "video-gt")
     p.add_argument("--accident-artifacts", type=Path, default=ROOT / "artifacts" / "accident")
     p.add_argument("--congestion-artifacts", type=Path, default=ROOT / "artifacts" / "congestion")
     p.add_argument("--batch-size", type=int, default=16)

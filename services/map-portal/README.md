@@ -1,20 +1,20 @@
-# map_portal
+# map-portal
 
 Веб-сервис с интерактивной картой (Leaflet, OpenStreetMap). **Данных в ClickHouse нет** — города, остановки и автобусы запрашиваются по **gRPC у analytics** (`map.v1.MapPortal`), который читает `its_infra_sim` из ClickHouse и держит в памяти последние позиции автобусов после приёма телеметрии на `POST /v1/ingest`.
 
 ## Цепочка
 
 1. **analytics** — HTTP `:8093`, gRPC **`MAP_GRPC_LISTEN_ADDR`** (по умолчанию `:8097`), ClickHouse для OLAP и для справочника `INFRA_SIM_DATABASE` (`its_infra_sim`).
-2. **map_portal** — HTTP (карта), клиент gRPC к analytics.
-3. Телеметрия: **data_ingestion** → analytics ingest → обновление in-memory хаба в analytics (как раньше «пересылка в map_portal», но теперь внутри analytics).
+2. **map-portal** — HTTP (карта), клиент gRPC к analytics.
+3. Телеметрия: **data-ingestion** → analytics ingest → обновление in-memory хаба в analytics (как раньше «пересылка в map-portal», но теперь внутри analytics).
 
 ## Запуск
 
 Сначала **analytics** (с доступом к ClickHouse и применённым `infra/clickhouse/bootstrap.sh`).
 
 ```bash
-cd services/map_portal
-go run ./cmd/map_portal
+cd services/map-portal
+go run ./cmd/map-portal
 ```
 
 Браузер: http://127.0.0.1:8096/

@@ -21,13 +21,13 @@ def main() -> None:
     p.add_argument(
         "--accident-images-root",
         type=Path,
-        default=ROOT / "data" / "accident" / "video_gt" / "images",
+        default=ROOT / "data" / "accident" / "video-gt" / "images",
         help="Will contain test/normal/*.png symlinks",
     )
     p.add_argument(
         "--congestion-root",
         type=Path,
-        default=ROOT / "data" / "congestion" / "video_gt",
+        default=ROOT / "data" / "congestion" / "video-gt",
         help="images/test/*.png symlinks + labels/test.csv",
     )
     p.add_argument(
@@ -77,11 +77,11 @@ def main() -> None:
         for path, score in rows:
             w.writerow({"path": path, "congestion": score})
 
-    readme = args.congestion_root.parent / "video_gt_README.txt"
+    readme = args.congestion_root.parent / "video-gt_README.txt"
     readme.write_text(
         "Ground truth for your driving videos (no real incidents in footage):\n"
         "- accident: all samples in test/normal/ (class normal).\n"
-        f"- congestion: all targets = {args.congestion_target} in congestion/video_gt/labels/test.csv\n"
+        f"- congestion: all targets = {args.congestion_target} in congestion/video-gt/labels/test.csv\n"
         f"- frames linked: {len(frames)}\n",
         encoding="utf-8",
     )
