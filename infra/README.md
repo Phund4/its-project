@@ -14,6 +14,32 @@ docker compose up -d
 docker compose down
 ```
 
+### Профиль `ingest` (MediaMTX + видео-симулятор)
+
+Поднять только RTSP и публикацию тестовых потоков:
+
+```bash
+docker compose --profile ingest up -d mediamtx video-source-sim
+```
+
+**Остановить** эти контейнеры, не трогая остальной стек (Kafka, ClickHouse и т.д.):
+
+```bash
+docker compose --profile ingest stop mediamtx video-source-sim
+```
+
+Снова запустить:
+
+```bash
+docker compose --profile ingest start mediamtx video-source-sim
+```
+
+Удалить контейнеры профиля `ingest` (данные в томах основного стека не затрагиваются):
+
+```bash
+docker compose --profile ingest rm -sf mediamtx video-source-sim
+```
+
 Данные **ClickHouse**, **Kafka**, **Zookeeper**, **Elasticsearch**, **MinIO**, **Prometheus** (TSDB) и **Grafana** (в том числе дашборды и настройки, созданные в UI) хранятся в именованных томах и переживают перезапуск контейнеров. Конфиг Prometheus по-прежнему файл [`prometheus/prometheus.yml`](prometheus/prometheus.yml); после правок: `docker compose restart prometheus` или lifecycle reload.
 
 ## Сервисы и подключение

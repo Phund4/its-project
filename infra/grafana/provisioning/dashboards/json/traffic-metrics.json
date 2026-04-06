@@ -82,16 +82,23 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": { "mode": "thresholds" },
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 30,
             "lineWidth": 1,
-            "showPoints": "never"
+            "showPoints": "auto"
           },
           "max": 1,
           "min": 0,
-          "unit": "percentunit"
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "none"
         }
       },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
@@ -101,12 +108,12 @@
       },
       "targets": [
         {
-          "expr": "analytics_road_crash_probability",
+          "expr": "analytics_road_crash_alert",
           "legendFormat": "{{segment_id}} / {{camera_id}}",
           "refId": "A"
         }
       ],
-      "title": "Вероятность ДТП (crash_probability)",
+      "title": "Факт ДТП по камере (has_incident, 1 = авария)",
       "type": "timeseries"
     },
     {

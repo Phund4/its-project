@@ -1,0 +1,292 @@
+{
+  "annotations": { "list": [] },
+  "description": "Kafka ingest (analytics consumer, телеметрия) и доступность сервисов из prometheus.yml. Kafka UI: http://localhost:8080",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "Kafka UI",
+      "tooltip": "Топики, consumer groups",
+      "type": "link",
+      "url": "http://localhost:8080"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true }
+      },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(analytics_kafka_ingest_processed_total[5m]))",
+          "legendFormat": "{{topic}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Analytics: сообщения из Kafka (по топикам)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "showPoints": "never" },
+          "unit": "ops"
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(data_ingestion_bus_telemetry_forwarded_total[5m]))",
+          "legendFormat": "forwarded",
+          "refId": "A"
+        }
+      ],
+      "title": "Data ingestion: телеметрия переслана",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "axisBorderShow": false,
+            "drawStyle": "line",
+            "fillOpacity": 35,
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": true
+          },
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 9 },
+      "id": 3,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true }
+      },
+      "targets": [
+        {
+          "expr": "1 - up{job=~\"analytics|ml_gateway|data_ingestion|map_portal\"}",
+          "legendFormat": "{{job}} — {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Падения сервисов (1 = /metrics не отвечает)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "red", "index": 0, "text": "DOWN" } }, "type": "value" },
+            { "options": { "1": { "color": "green", "index": 1, "text": "UP" } }, "type": "value" }
+          ],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 19 },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"analytics\"}",
+          "legendFormat": "analytics",
+          "refId": "A"
+        }
+      ],
+      "title": "analytics",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "red", "index": 0, "text": "DOWN" } }, "type": "value" },
+            { "options": { "1": { "color": "green", "index": 1, "text": "UP" } }, "type": "value" }
+          ],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 19 },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"ml_gateway\"}",
+          "legendFormat": "ml_gateway",
+          "refId": "A"
+        }
+      ],
+      "title": "ml_gateway",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "red", "index": 0, "text": "DOWN" } }, "type": "value" },
+            { "options": { "1": { "color": "green", "index": 1, "text": "UP" } }, "type": "value" }
+          ],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 19 },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"data_ingestion\"}",
+          "legendFormat": "data_ingestion",
+          "refId": "A"
+        }
+      ],
+      "title": "data_ingestion",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "red", "index": 0, "text": "DOWN" } }, "type": "value" },
+            { "options": { "1": { "color": "green", "index": 1, "text": "UP" } }, "type": "value" }
+          ],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 19 },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"map_portal\"}",
+          "legendFormat": "map_portal",
+          "refId": "A"
+        }
+      ],
+      "title": "map_portal",
+      "type": "stat"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["traffic", "kafka"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Kafka и сервисы",
+  "uid": "kafka-services",
+  "version": 1
+}
