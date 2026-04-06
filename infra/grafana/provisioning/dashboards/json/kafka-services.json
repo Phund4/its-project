@@ -1,23 +1,10 @@
 {
   "annotations": { "list": [] },
-  "description": "Kafka ingest (analytics consumer, телеметрия) и доступность сервисов из prometheus.yml. Kafka UI: http://localhost:8080",
+  "description": "Kafka ingest (analytics consumer, телеметрия) и доступность сервисов из prometheus.yml.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "includeVars": false,
-      "keepTime": false,
-      "tags": [],
-      "targetBlank": true,
-      "title": "Kafka UI",
-      "tooltip": "Топики, consumer groups",
-      "type": "link",
-      "url": "http://localhost:8080"
-    }
-  ],
+  "links": [],
   "panels": [
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },

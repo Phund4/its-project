@@ -24,7 +24,6 @@ flowchart LR
     CH[ClickHouse]
     Prom[Prometheus]
     Graf[Grafana]
-    KUI[Kafka UI]
   end
 
   VideoSim -->|RTSP| MTX
@@ -47,7 +46,6 @@ flowchart LR
   Prom -->|HTTP scrape metrics| AN
   Prom -->|HTTP scrape metrics| MP
   Graf -->|PromQL datasource| Prom
-  KUI -->|HTTP UI| KFK
 ```
 
 ## Ключевые протоколы

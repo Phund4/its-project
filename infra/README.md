@@ -48,8 +48,6 @@ docker compose --profile ingest rm -sf mediamtx video-source-sim
 
 - **Kafka** — с хоста: `localhost:9092`; внутри сети: `kafka:29092`. Пример: `export KAFKA_BOOTSTRAP_SERVERS=localhost:9092`.
 
-- **Kafka UI** — http://localhost:8080
-
 - **Elasticsearch** — http://localhost:9200 (без логина, dev). Внутри сети: `elasticsearch:9200`.
 
 - **Kibana** — http://localhost:5601

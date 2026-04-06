@@ -1,4 +1,4 @@
-# Локальный стек: Kafka (+ UI), Elasticsearch + Kibana, ClickHouse, MinIO, Prometheus + Grafana.
+# Локальный стек: Kafka, Elasticsearch + Kibana, ClickHouse, MinIO, Prometheus + Grafana.
 name: traffic-infra
 
 services:
@@ -58,20 +58,6 @@ services:
       timeout: 10s
       retries: 8
       start_period: 40s
-
-  kafka-ui:
-    image: docker.io/provectuslabs/kafka-ui:v0.7.2
-    hostname: kafka-ui
-    depends_on:
-      kafka:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-    networks:
-      - its
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
