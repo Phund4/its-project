@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -18,7 +19,24 @@ import (
 	"data-ingestion/internal/core/domain"
 )
 
+// enqueueFrame кладёт кадр в очередь; при переполнении выбрасывает старый кадр, чтобы чтение из ffmpeg не стопорилось на ML/S3.
+func enqueueFrame(ch chan []byte, frame []byte) {
+	select {
+	case ch <- frame:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		select {
+		case ch <- frame:
+		default:
+		}
+	}
+}
+
 // RunCamera в цикле подключается к RTSP, читает кадры, заливает PNG в S3 и вызывает ML process.
+// targetFPS задаёт дискретизацию в ffmpeg; processWorkers — сколько кадров с одной камеры обрабатывается параллельно (иначе фактический FPS ограничен latency S3+ML).
 func RunCamera(
 	ctx context.Context,
 	cam config.Camera,
@@ -27,6 +45,7 @@ func RunCamera(
 	s3Prefix string,
 	ffmpegPath string,
 	targetFPS float64,
+	processWorkers int,
 ) {
 	log := slog.With("segment", cam.SegmentID, "camera", cam.CameraID)
 	prefix := strings.Trim(s3Prefix, "/")
@@ -45,51 +64,77 @@ func RunCamera(
 			continue
 		}
 		sc := capture.NewScanner(pipe)
-		for {
-			frame, err := sc.ReadFrameCtx(subCtx)
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					break
-				}
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				metrics.OperationErrors.WithLabelValues("frame_read").Inc()
-				logSourceIssueThrottled(&lastUpstreamLog, log, "frame read (stream interrupted or paused)", "err", err)
-				break
-			}
-			n := frameNo.Add(1)
-			now := time.Now().UTC()
-			day := now.Format("2006-01-02")
-			ts := now.UnixNano()
-			key := fmt.Sprintf("%s/%s/%s/frame_%d.png", prefix, day, cam.CameraID, ts)
-
-			pngBytes, err := s3store.JPEGBytesToPNG(frame)
-			if err != nil {
-				metrics.OperationErrors.WithLabelValues("s3_put").Inc()
-				log.Error("jpeg to png", "err", err)
-				continue
-			}
-			if err := store.PutPNG(ctx, key, pngBytes); err != nil {
-				metrics.OperationErrors.WithLabelValues("s3_put").Inc()
-				log.Error("s3 put", "key", key, "err", err)
-			}
-
-			meta := domain.ProcessMeta{
-				SegmentID:  cam.SegmentID,
-				CameraID:   cam.CameraID,
-				S3Key:      key,
-				ObservedAt: now.Format(time.RFC3339Nano),
-			}
-			if err := mlc.PostProcess(ctx, frame, "frame.jpg", meta); err != nil {
-				metrics.OperationErrors.WithLabelValues("ml_process").Inc()
-				log.Warn("ml process", "err", err)
-			}
-
-			if n%frameLogEveryN == 0 {
-				log.Info("frames", "count", n, "last_key", key)
-			}
+		bufCap := processWorkers * 2
+		if bufCap < 4 {
+			bufCap = 4
 		}
+		frameCh := make(chan []byte, bufCap)
+
+		var readerWG sync.WaitGroup
+		readerWG.Add(1)
+		go func() {
+			defer readerWG.Done()
+			defer close(frameCh)
+			for {
+				frame, err := sc.ReadFrameCtx(subCtx)
+				if err != nil {
+					if errors.Is(err, context.Canceled) {
+						return
+					}
+					if errors.Is(err, io.EOF) {
+						return
+					}
+					metrics.OperationErrors.WithLabelValues("frame_read").Inc()
+					logSourceIssueThrottled(&lastUpstreamLog, log, "frame read (stream interrupted or paused)", "err", err)
+					return
+				}
+				enqueueFrame(frameCh, frame)
+			}
+		}()
+
+		var workersWG sync.WaitGroup
+		for range processWorkers {
+			workersWG.Add(1)
+			go func() {
+				defer workersWG.Done()
+				for frame := range frameCh {
+					n := frameNo.Add(1)
+					now := time.Now().UTC()
+					day := now.Format("2006-01-02")
+					ts := now.UnixNano()
+					key := fmt.Sprintf("%s/%s/%s/frame_%d.png", prefix, day, cam.CameraID, ts)
+
+					pngBytes, err := s3store.JPEGBytesToPNG(frame)
+					if err != nil {
+						metrics.OperationErrors.WithLabelValues("s3_put").Inc()
+						log.Error("jpeg to png", "err", err)
+						continue
+					}
+					if err := store.PutPNG(ctx, key, pngBytes); err != nil {
+						metrics.OperationErrors.WithLabelValues("s3_put").Inc()
+						log.Error("s3 put", "key", key, "err", err)
+					}
+
+					meta := domain.ProcessMeta{
+						SegmentID:  cam.SegmentID,
+						CameraID:   cam.CameraID,
+						S3Key:      key,
+						ObservedAt: now.Format(time.RFC3339Nano),
+					}
+					if err := mlc.PostProcess(ctx, frame, "frame.jpg", meta); err != nil {
+						metrics.OperationErrors.WithLabelValues("ml_process").Inc()
+						log.Warn("ml process", "err", err)
+					}
+
+					if n%frameLogEveryN == 0 {
+						log.Info("frames", "count", n, "last_key", key)
+					}
+				}
+			}()
+		}
+
+		readerWG.Wait()
+		workersWG.Wait()
 		_ = pipe.Close()
 		cancel()
 		if ctx.Err() != nil {

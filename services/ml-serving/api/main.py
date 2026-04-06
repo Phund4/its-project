@@ -1,8 +1,10 @@
-"""Mock ML API: incident classification and congestion score (loads checkpoints)."""
+"""ML serving API: incident classification and congestion score."""
 
 from __future__ import annotations
 
 import io
+import json
+import logging
 import os
 import sys
 import threading
@@ -11,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# ROOT = services/ml-serving; репозиторий — на два уровня выше.
+REPO_ROOT = ROOT.parent.parent
 
 try:
     from dotenv import load_dotenv
@@ -30,7 +34,8 @@ from PIL import Image
 sys.path.insert(0, str(ROOT))
 from inference_core import load_checkpoint_auto, make_transform
 
-app = FastAPI(title="ITS Mock ML", version="0.1")
+app = FastAPI(title="ITS ML Serving", version="0.1")
+_log = logging.getLogger("ml-serving")
 
 _acc_model: nn.Module | None = None
 _acc_img: int = 128
@@ -40,13 +45,17 @@ _cong_model: nn.Module | None = None
 _cong_img: int = 128
 _cong_tf = None
 
-# Per (segment_id, camera_id): last monotonic time and cached congestion dict (model runs at most every CONGESTION_INTERVAL_SEC).
 _cong_lock = threading.Lock()
 _cong_cache: dict[str, tuple[float, dict]] = {}
 
+_acc_ckpt_used: str = ""
+_cong_ckpt_used: str = ""
+_winners_json_path: str = ""
+_acc_from_winners: bool = False
+_cong_from_winners: bool = False
+
 
 def _congestion_interval_sec() -> float:
-    """Возвращает интервал (сек) между пересчётами загруженности для пары segment/camera из CONGESTION_INTERVAL_SEC."""
     v = os.environ.get("CONGESTION_INTERVAL_SEC", "2").strip()
     try:
         x = float(v)
@@ -55,70 +64,143 @@ def _congestion_interval_sec() -> float:
         return 2.0
 
 
+def _resolve_checkpoint_path(raw: str) -> Path:
+    """Путь из env или winners.json: абсолютный или относительно корня репозитория."""
+    p = Path(raw.strip())
+    if p.is_file():
+        return p.resolve()
+    q = (REPO_ROOT / raw.strip().lstrip("/")).resolve()
+    return q
+
+
+def _winners_default_path() -> Path:
+    return Path(os.environ.get("WINNERS_JSON", str(REPO_ROOT / ".data" / "ml-experiments" / "winners.json")))
+
+
+def _load_winners_checkpoints() -> tuple[Path | None, Path | None]:
+    path = _winners_default_path()
+    if not path.is_file():
+        return None, None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, None
+    acc_s = (data.get("accident") or {}).get("checkpoint")
+    cong_s = (data.get("congestion") or {}).get("checkpoint")
+    acc_p = _resolve_checkpoint_path(acc_s) if isinstance(acc_s, str) and acc_s.strip() else None
+    cong_p = _resolve_checkpoint_path(cong_s) if isinstance(cong_s, str) and cong_s.strip() else None
+    if acc_p is not None and not acc_p.is_file():
+        acc_p = None
+    if cong_p is not None and not cong_p.is_file():
+        cong_p = None
+    return acc_p, cong_p
+
+
 @app.on_event("startup")
 def startup() -> None:
-    """Загружает чекпойнты ДТП и загруженности при старте приложения."""
     global _acc_model, _acc_img, _acc_tf, _crash_idx, _cong_model, _cong_img, _cong_tf
-    acc_path = Path(os.environ.get("ACCIDENT_CKPT", ROOT / "artifacts" / "accident" / "baseline-cnn" / "best.pt"))
-    cong_path = Path(os.environ.get("CONGESTION_CKPT", ROOT / "artifacts" / "congestion" / "tiny-cnn" / "best.pt"))
+    global _acc_ckpt_used, _cong_ckpt_used, _winners_json_path, _acc_from_winners, _cong_from_winners
+
+    _acc_ckpt_used = ""
+    _cong_ckpt_used = ""
+    _winners_json_path = ""
+    _acc_from_winners = False
+    _cong_from_winners = False
+
+    default_acc = REPO_ROOT / ".data" / "ml-experiments" / "artifacts" / "accident" / "baseline-cnn" / "best.pt"
+    default_cong = REPO_ROOT / ".data" / "ml-experiments" / "artifacts" / "congestion" / "tiny-cnn" / "best.pt"
+
+    w_acc, w_cong = _load_winners_checkpoints()
+    wp = _winners_default_path()
+    if wp.is_file():
+        _winners_json_path = str(wp.resolve())
+
+    acc_env = os.environ.get("ACCIDENT_CKPT", "").strip()
+    cong_env = os.environ.get("CONGESTION_CKPT", "").strip()
+
+    if acc_env:
+        acc_path = _resolve_checkpoint_path(acc_env)
+    elif w_acc is not None:
+        acc_path = w_acc
+        _acc_from_winners = True
+    else:
+        acc_path = default_acc
+
+    if cong_env:
+        cong_path = _resolve_checkpoint_path(cong_env)
+    elif w_cong is not None:
+        cong_path = w_cong
+        _cong_from_winners = True
+    else:
+        cong_path = default_cong
+
     if acc_path.is_file():
         _acc_model, _acc_img, meta = load_checkpoint_auto(acc_path)
         _acc_tf = make_transform(_acc_img)
         _crash_idx = int(meta.get("class_to_idx", {}).get("crash", 0))
+        _acc_ckpt_used = str(acc_path.resolve())
     if cong_path.is_file():
         _cong_model, _cong_img, _ = load_checkpoint_auto(cong_path)
         _cong_tf = make_transform(_cong_img)
+        _cong_ckpt_used = str(cong_path.resolve())
+
+    if not os.environ.get("ML_GATEWAY_URL", "").strip():
+        _log.warning(
+            "ML_GATEWAY_URL не задан: POST /v1/process отдаёт только JSON; "
+            "ml-gateway и Kafka (its.video.ingest) не получают события. "
+            "Задайте переменную окружения или заполните services/ml-serving/.env"
+        )
 
 
 @app.get("/health")
 def health():
-    """Отдаёт JSON о загрузке моделей, интервале congestion и наличии ML_GATEWAY_URL."""
     return {
         "accident_loaded": _acc_model is not None,
         "congestion_loaded": _cong_model is not None,
         "congestion_interval_sec": _congestion_interval_sec(),
         "ml_gateway_push": bool(os.environ.get("ML_GATEWAY_URL", "").strip()),
+        "accident_checkpoint": _acc_ckpt_used or None,
+        "congestion_checkpoint": _cong_ckpt_used or None,
+        "winners_json": _winners_json_path or None,
+        "accident_from_winners_json": _acc_from_winners,
+        "congestion_from_winners_json": _cong_from_winners,
+        "ml_gateway_configured": bool(os.environ.get("ML_GATEWAY_URL", "").strip()),
     }
 
 
 def _bytes_to_tensor(data: bytes, tf, device: torch.device) -> torch.Tensor:
-    """Декодирует байты изображения в тензор батча [1,C,H,W] на указанном device."""
     img = Image.open(io.BytesIO(data)).convert("RGB")
-    t = tf(img).unsqueeze(0).to(device)
-    return t
+    return tf(img).unsqueeze(0).to(device)
 
 
 def _predict_incident(raw: bytes) -> dict:
-    """Запускает классификатор инцидента; возвращает вероятности и метку crash/normal."""
     if _acc_model is None or _acc_tf is None:
         raise HTTPException(503, "accident model not loaded; set ACCIDENT_CKPT")
-    device = torch.device("cpu")
-    x = _bytes_to_tensor(raw, _acc_tf, device)
+    x = _bytes_to_tensor(raw, _acc_tf, torch.device("cpu"))
     with torch.no_grad():
         logits = _acc_model(x)
         prob = torch.softmax(logits, dim=1)[0, _crash_idx].item()
         pred = int(logits.argmax(1).item())
+    has_incident = pred == _crash_idx
     return {
         "crash_probability": prob,
         "predicted_class_index": pred,
         "crash_class_index": _crash_idx,
-        "label": "crash" if pred == _crash_idx else "normal",
+        "label": "crash" if has_incident else "normal",
+        "has_incident": has_incident,
     }
 
 
 def _predict_congestion(raw: bytes) -> dict:
-    """Запускает регрессор загруженности и возвращает congestion_score."""
     if _cong_model is None or _cong_tf is None:
         raise HTTPException(503, "congestion model not loaded; set CONGESTION_CKPT")
-    device = torch.device("cpu")
-    x = _bytes_to_tensor(raw, _cong_tf, device)
+    x = _bytes_to_tensor(raw, _cong_tf, torch.device("cpu"))
     with torch.no_grad():
         score = float(_cong_model(x).item())
     return {"congestion_score": score, "note": "proxy [0,1] from lab regressor"}
 
 
 def _congestion_for_pair(raw: bytes, segment_id: str, camera_id: str) -> dict:
-    """Считает загруженность не чаще раза в CONGESTION_INTERVAL_SEC на пару (segment_id, camera_id); иначе отдаёт кэш."""
     key = f"{segment_id.strip()}|{camera_id.strip()}"
     interval = _congestion_interval_sec()
     now = time.monotonic()
@@ -133,32 +215,20 @@ def _congestion_for_pair(raw: bytes, segment_id: str, camera_id: str) -> dict:
 
 
 def _process_payload(raw: bytes, segment_id: str = "", camera_id: str = "") -> dict:
-    """Собирает словарь с блоками incident и congestion для одного кадра."""
     incident = _predict_incident(raw)
     seg = (segment_id or "").strip()
     cam = (camera_id or "").strip()
-    if seg and cam:
-        congestion = _congestion_for_pair(raw, seg, cam)
-    else:
-        congestion = _predict_congestion(raw)
+    congestion = _congestion_for_pair(raw, seg, cam) if seg and cam else _predict_congestion(raw)
     return {"incident": incident, "congestion": congestion}
 
 
-async def _push_to_ml_gateway(
-    ml_payload: dict,
-    segment_id: str,
-    camera_id: str,
-    s3_key: str,
-    observed_at: str,
-) -> None:
-    """POST JSON в ml_gateway; при ошибке сети или статуса бросает HTTPException 502."""
+async def _push_to_ml_gateway(ml_payload: dict, segment_id: str, camera_id: str, s3_key: str, observed_at: str) -> None:
     base = os.environ.get("ML_GATEWAY_URL", "").strip().rstrip("/")
     if not base:
         return
     path = os.environ.get("ML_GATEWAY_PATH", "/v1/road-events").strip()
     if not path.startswith("/"):
         path = "/" + path
-    url = f"{base}{path}"
     timeout = float(os.environ.get("ML_GATEWAY_TIMEOUT", "10"))
     body = {
         "segment_id": segment_id,
@@ -169,25 +239,11 @@ async def _push_to_ml_gateway(
     }
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            r = await client.post(url, json=body)
+            r = await client.post(f"{base}{path}", json=body)
     except httpx.RequestError as e:
         raise HTTPException(502, f"ml_gateway unreachable: {e}") from e
     if r.status_code < 200 or r.status_code >= 300:
         raise HTTPException(502, f"ml_gateway HTTP {r.status_code}: {r.text[:512]}")
-
-
-@app.post("/v1/incident")
-async def incident(image: UploadFile = File(...)):
-    """HTTP: только классификация инцидента по одному загруженному изображению."""
-    raw = await image.read()
-    return _predict_incident(raw)
-
-
-@app.post("/v1/congestion")
-async def congestion(image: UploadFile = File(...)):
-    """HTTP: только оценка загруженности по одному изображению."""
-    raw = await image.read()
-    return _predict_congestion(raw)
 
 
 @app.post("/v1/process")
@@ -198,26 +254,16 @@ async def process(
     s3_key: str | None = Form(None),
     observed_at: str | None = Form(None),
 ):
-    """Если задан ML_GATEWAY_URL — шлёт результат инференса в шлюз и отвечает 204 без тела.
-
-    Иначе возвращает JSON с полями incident и congestion (локальные клиенты).
-    """
     raw = await image.read()
     gw = os.environ.get("ML_GATEWAY_URL", "").strip()
     seg = (segment_id or "").strip()
     cam = (camera_id or "").strip()
     if gw:
         if not seg or not cam:
-            raise HTTPException(
-                400,
-                "segment_id and camera_id form fields are required when ML_GATEWAY_URL is set",
-            )
+            raise HTTPException(400, "segment_id and camera_id are required when ML_GATEWAY_URL is set")
         payload = _process_payload(raw, seg, cam)
-        obs = (observed_at or "").strip()
-        if not obs:
-            obs = datetime.now(timezone.utc).isoformat()
+        obs = (observed_at or "").strip() or datetime.now(timezone.utc).isoformat()
         key = (s3_key or "").strip()
         await _push_to_ml_gateway(payload, seg, cam, key, obs)
         return Response(status_code=204)
-    payload = _process_payload(raw, seg, cam)
-    return JSONResponse(payload)
+    return JSONResponse(_process_payload(raw, seg, cam))

@@ -46,13 +46,9 @@ type IngestBody struct {
 	Telemetry json.RawMessage `json:"telemetry"`
 }
 
-// PostIngest сериализует body и выполняет POST.
-func (c *Client) PostIngest(ctx context.Context, body IngestBody) error {
-	b, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("marshal ingest: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ingestURL, bytes.NewReader(b))
+// PublishIngestJSON выполняет POST сырого JSON (как PostIngest после marshal).
+func (c *Client) PublishIngestJSON(ctx context.Context, payload []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ingestURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("new request: %w", err)
 	}
@@ -66,4 +62,13 @@ func (c *Client) PostIngest(ctx context.Context, body IngestBody) error {
 		return fmt.Errorf("analytics ingest: status %s", resp.Status)
 	}
 	return nil
+}
+
+// PostIngest сериализует body и выполняет POST.
+func (c *Client) PostIngest(ctx context.Context, body IngestBody) error {
+	b, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal ingest: %w", err)
+	}
+	return c.PublishIngestJSON(ctx, b)
 }

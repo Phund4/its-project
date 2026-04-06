@@ -37,9 +37,9 @@ func withAppShutdown(req, app context.Context) (context.Context, context.CancelF
 
 func roadEventsHandler(fwd *services.Forwarder, appCtx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if fwd.AnalyticsURL() == "" {
+		if !fwd.HasDestination() {
 			metrics.OperationErrors.WithLabelValues("forward_analytics").Inc()
-			http.Error(w, "analytics not configured (set ANALYTICS_BASE_URL)", http.StatusServiceUnavailable)
+			http.Error(w, "analytics not configured (set KAFKA_BOOTSTRAP_SERVERS or ANALYTICS_BASE_URL)", http.StatusServiceUnavailable)
 			return
 		}
 

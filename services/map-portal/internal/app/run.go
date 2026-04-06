@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -38,6 +39,7 @@ func Run(rootCtx context.Context) error {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
+	mux.Handle("/metrics", promhttp.Handler())
 	httpapi.Register(mux, mapCli)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

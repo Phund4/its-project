@@ -29,7 +29,20 @@ func TelemetryListenAddrFromEnv() string {
 	return ":50051"
 }
 
-// AnalyticsIngestURLFromEnv — полный URL POST /v1/ingest (обязателен при TELEMETRY_GRPC_ENABLED).
+// AnalyticsIngestURLFromEnv — полный URL POST /v1/ingest (если телеметрия без Kafka).
 func AnalyticsIngestURLFromEnv() string {
 	return strings.TrimRight(strings.TrimSpace(os.Getenv("ANALYTICS_INGEST_URL")), "/")
+}
+
+// KafkaBootstrapFromEnv — брокеры для телеметрии (пусто = только HTTP).
+func KafkaBootstrapFromEnv() string {
+	return strings.TrimSpace(os.Getenv("KAFKA_BOOTSTRAP_SERVERS"))
+}
+
+// KafkaTopicTelemetryFromEnv — топик телеметрии (совпадает с analytics).
+func KafkaTopicTelemetryFromEnv() string {
+	if v := strings.TrimSpace(os.Getenv("KAFKA_TOPIC_TELEMETRY")); v != "" {
+		return v
+	}
+	return "its.telemetry.ingest"
 }

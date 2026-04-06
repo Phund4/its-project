@@ -5,6 +5,9 @@ go 1.22
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.30.0
 	github.com/prometheus/client_golang v1.20.5
+	github.com/segmentio/kafka-go v0.4.47
+	google.golang.org/grpc v1.67.1
+	google.golang.org/protobuf v1.34.2
 )
 
 require (
@@ -31,7 +34,5 @@ require (
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
-	google.golang.org/grpc v1.67.1 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,9 @@ import (
 	"traffic-analytics/internal/core/domain"
 	"traffic-analytics/internal/portalhub"
 )
+
+// errIngestValidation обязательные поля JSON отсутствуют.
+var errIngestValidation = errors.New("segment_id, camera_id, observed_at required")
 
 // EventStore — хранение инцидентов и загруженности (реализует адаптер clickhouse).
 type EventStore interface {
@@ -70,11 +74,19 @@ func (s *IngestService) HandleIngest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "read body", http.StatusBadRequest)
 		return
 	}
+	if err := s.ProcessIngest(reqCtx, body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ProcessIngest разбирает JSON тела дорожного события (как POST /v1/ingest) и пишет метрики/CH/хаб.
+func (s *IngestService) ProcessIngest(ctx context.Context, body []byte) error {
 	var ev domain.RoadEvent
 	if err := json.Unmarshal(body, &ev); err != nil {
 		metrics.IngestErrors.WithLabelValues("json_decode").Inc()
-		http.Error(w, "invalid json", http.StatusBadRequest)
-		return
+		return err
 	}
 	seg := sanitizeLabel(strings.TrimSpace(ev.SegmentID))
 	cam := sanitizeLabel(strings.TrimSpace(ev.CameraID))
@@ -82,15 +94,13 @@ func (s *IngestService) HandleIngest(w http.ResponseWriter, r *http.Request) {
 	s3k := strings.TrimSpace(ev.S3Key)
 	if seg == "" || cam == "" || atStr == "" {
 		metrics.IngestErrors.WithLabelValues("validate").Inc()
-		http.Error(w, "segment_id, camera_id, observed_at required", http.StatusBadRequest)
-		return
+		return errIngestValidation
 	}
 
 	hasML := len(ev.ML) > 0 && string(ev.ML) != "null"
 	hasTelemetry := len(ev.Telemetry) > 0 && string(ev.Telemetry) != "null"
 	if hasTelemetry {
 		metrics.TelemetryIngested.WithLabelValues(seg, cam).Inc()
-		// Телеметрия не сохраняется в ClickHouse; в БД уходят только события из блока ml.
 		s.applyTelemetryToPortalHub(ev.Telemetry)
 	}
 
@@ -109,7 +119,17 @@ func (s *IngestService) HandleIngest(w http.ResponseWriter, r *http.Request) {
 	if hasML {
 		metrics.CongestionScore.WithLabelValues(seg, cam).Set(cong)
 		metrics.CrashProbability.WithLabelValues(seg, cam).Set(crashP)
-		alert = strings.EqualFold(lbl, "crash") || crashP >= s.cfg.CrashAlertThreshold
+		// Presence-first semantics:
+		// 1) explicit has_incident when producer provides it,
+		// 2) then label-based legacy signal,
+		// 3) probability threshold only as compatibility fallback.
+		if ml.Incident.HasIncident != nil {
+			alert = *ml.Incident.HasIncident
+		} else if lbl != "" {
+			alert = strings.EqualFold(lbl, "crash")
+		} else {
+			alert = crashP >= s.cfg.CrashAlertThreshold
+		}
 		alertVal := 0.0
 		if alert {
 			alertVal = 1.0
@@ -127,7 +147,7 @@ func (s *IngestService) HandleIngest(w http.ResponseWriter, r *http.Request) {
 		raw = "{}"
 	}
 
-	chCtx, chCancel := context.WithTimeout(reqCtx, s.clickhouseTO)
+	chCtx, chCancel := context.WithTimeout(ctx, s.clickhouseTO)
 	defer chCancel()
 
 	if hasML && s.shouldPersistCongestion(seg, cam) {
@@ -147,7 +167,7 @@ func (s *IngestService) HandleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 func sanitizeLabel(s string) string {

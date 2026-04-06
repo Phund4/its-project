@@ -63,4 +63,18 @@ var (
 		},
 		[]string{"stage"},
 	)
+	KafkaIngestProcessed = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "analytics_kafka_ingest_processed_total",
+			Help: "Ingest payloads successfully processed from Kafka by topic.",
+		},
+		[]string{"topic"},
+	)
+	KafkaConsumeErrors = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "analytics_kafka_consume_errors_total",
+			Help: "Kafka consumer failures by stage.",
+		},
+		[]string{"stage"},
+	)
 )

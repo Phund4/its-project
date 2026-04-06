@@ -13,6 +13,8 @@ ml:
 
 ingest:
   target_fps: 5
+  # Параллельная обработка кадров с одной камеры (по умолчанию ceil(target_fps)), иначе FPS в логах ≈ 1/latency(S3+ML).
+  process_workers: 5
   create_bucket_if_missing: true
   ffmpeg_path: "ffmpeg"
 

@@ -25,6 +25,9 @@ type RoadEvent struct {
 
 // IncidentBlock поддерево ml.incident.
 type IncidentBlock struct {
+	// HasIncident явный флаг наличия аварии (источник истины при наличии поля).
+	HasIncident *bool `json:"has_incident,omitempty"`
+
 	// CrashProbability оценка вероятности ДТП [0, 1].
 	CrashProbability float64 `json:"crash_probability"`
 

@@ -8,8 +8,10 @@ import (
 	"time"
 
 	analyticsclient "data-ingestion/internal/adapters/analytics"
+	kafkaadapter "data-ingestion/internal/adapters/kafka"
 	mlclient "data-ingestion/internal/adapters/ml"
 	s3store "data-ingestion/internal/adapters/s3"
+	"data-ingestion/internal/adapters/telemetry"
 	"data-ingestion/internal/adapters/telemetrygrpc"
 	"data-ingestion/internal/config"
 )
@@ -28,8 +30,8 @@ type Deps struct {
 	// ML клиент HTTP к сервису обработки кадров.
 	ML *mlclient.Client
 
-	// Analytics клиент POST /v1/ingest при телеметрии gRPC.
-	Analytics *analyticsclient.Client
+	// TelemetryPublisher HTTP или Kafka для gRPC телеметрии.
+	TelemetryPublisher telemetry.Publisher
 
 	// TelemetryGRPC сервер gRPC BusTelemetry при TELEMETRY_GRPC_ENABLED.
 	TelemetryGRPC *telemetrygrpc.Server
@@ -49,12 +51,23 @@ func InitializeDependencies(ctx context.Context) (*Deps, error) {
 	deps := &Deps{Config: cfg, Features: feat}
 
 	if feat.TelemetryGRPC {
-		url := config.AnalyticsIngestURLFromEnv()
-		if url == "" {
-			return nil, fmt.Errorf("ANALYTICS_INGEST_URL обязателен при TELEMETRY_GRPC_ENABLED=true")
+		kb := config.KafkaBootstrapFromEnv()
+		if kb != "" {
+			topic := config.KafkaTopicTelemetryFromEnv()
+			kp, err := kafkaadapter.NewTelemetryProducer(kb, topic)
+			if err != nil {
+				return nil, fmt.Errorf("kafka telemetry producer: %w", err)
+			}
+			deps.TelemetryPublisher = kp
+			slog.Info("telemetry to kafka", "topic", topic)
+		} else {
+			url := config.AnalyticsIngestURLFromEnv()
+			if url == "" {
+				return nil, fmt.Errorf("при TELEMETRY_GRPC_ENABLED: задайте KAFKA_BOOTSTRAP_SERVERS или ANALYTICS_INGEST_URL")
+			}
+			deps.TelemetryPublisher = analyticsclient.New(url)
 		}
-		deps.Analytics = analyticsclient.New(url)
-		deps.TelemetryGRPC = &telemetrygrpc.Server{Analytics: deps.Analytics}
+		deps.TelemetryGRPC = &telemetrygrpc.Server{Publisher: deps.TelemetryPublisher}
 		deps.TelemetryListenAddr = config.TelemetryListenAddrFromEnv()
 	}
 

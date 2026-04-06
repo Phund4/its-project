@@ -21,6 +21,12 @@ type Config struct {
 
 	// AnalyticsTimeout таймаут HTTP к analytics.
 	AnalyticsTimeout time.Duration
+
+	// KafkaBootstrap брокеры (через запятую); если задано — события пишутся в Kafka вместо HTTP.
+	KafkaBootstrap string
+
+	// KafkaTopicVideo топик для POST /v1/road-events (совпадает с KAFKA_TOPIC_VIDEO в analytics).
+	KafkaTopicVideo string
 }
 
 // Load читает конфигурацию из переменных окружения (после опционального .env).
@@ -46,6 +52,11 @@ func Load() Config {
 		if sec, err := strconv.Atoi(s); err == nil && sec > 0 {
 			c.AnalyticsTimeout = time.Duration(sec) * time.Second
 		}
+	}
+	c.KafkaBootstrap = strings.TrimSpace(os.Getenv("KAFKA_BOOTSTRAP_SERVERS"))
+	c.KafkaTopicVideo = strings.TrimSpace(os.Getenv("KAFKA_TOPIC_VIDEO"))
+	if c.KafkaTopicVideo == "" {
+		c.KafkaTopicVideo = "its.video.ingest"
 	}
 	return c
 }

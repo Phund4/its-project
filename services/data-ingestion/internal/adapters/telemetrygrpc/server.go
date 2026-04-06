@@ -8,6 +8,7 @@ import (
 	busv1 "data-ingestion/api/bus/v1"
 	"data-ingestion/internal/adapters/analytics"
 	"data-ingestion/internal/adapters/metrics"
+	"data-ingestion/internal/adapters/telemetry"
 )
 
 // Server реализует BusTelemetryService: пересылает в analytics.
@@ -15,11 +16,11 @@ type Server struct {
 	// UnimplementedBusTelemetryServiceServer заглушки gRPC для совместимости.
 	busv1.UnimplementedBusTelemetryServiceServer
 
-	// Analytics HTTP-клиент в analytics ingest.
-	Analytics *analytics.Client
+	// Publisher HTTP POST или Kafka в топик телеметрии.
+	Publisher telemetry.Publisher
 }
 
-// SendBusTelemetry маппит proto → JSON telemetry и POST в analytics.
+// SendBusTelemetry маппит proto → JSON telemetry и доставляет в analytics (HTTP или Kafka).
 func (s *Server) SendBusTelemetry(ctx context.Context, in *busv1.BusTelemetry) (*busv1.SendBusTelemetryResponse, error) {
 	if in == nil {
 		return &busv1.SendBusTelemetryResponse{}, nil
@@ -58,7 +59,12 @@ func (s *Server) SendBusTelemetry(ctx context.Context, in *busv1.BusTelemetry) (
 		S3Key:      "",
 		Telemetry:  raw,
 	}
-	if err := s.Analytics.PostIngest(ctx, body); err != nil {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		slog.Warn("telemetry marshal ingest body", "err", err)
+		return &busv1.SendBusTelemetryResponse{}, nil
+	}
+	if err := s.Publisher.PublishIngestJSON(ctx, payload); err != nil {
 		metrics.OperationErrors.WithLabelValues("telemetry_forward_analytics").Inc()
 		slog.Warn("forward telemetry to analytics", "err", err)
 		return nil, err

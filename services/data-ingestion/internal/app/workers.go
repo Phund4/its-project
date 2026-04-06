@@ -15,7 +15,7 @@ func StartCameraWorkers(ctx context.Context, deps *Deps, wg *sync.WaitGroup) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			services.RunCamera(ctx, cam, deps.Store, deps.ML, deps.Config.S3.Prefix, deps.Config.Ingest.FFmpegPath, deps.Config.Ingest.TargetFPS)
+			services.RunCamera(ctx, cam, deps.Store, deps.ML, deps.Config.S3.Prefix, deps.Config.Ingest.FFmpegPath, deps.Config.Ingest.TargetFPS, deps.Config.Ingest.ProcessWorkers)
 		}()
 	}
 }

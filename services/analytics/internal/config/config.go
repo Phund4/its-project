@@ -45,6 +45,18 @@ type Config struct {
 
 	// MunicipalityActivityTTL окно «активности» города для приёма телеметрии в память карты.
 	MunicipalityActivityTTL time.Duration
+
+	// KafkaBootstrap серверы брокера (через запятую); пусто — консьюмер Kafka не запускается.
+	KafkaBootstrap string
+
+	// KafkaConsumerGroup группа для чтения топиков ingest.
+	KafkaConsumerGroup string
+
+	// KafkaTopicVideo топик событий ML/видео (ml-gateway → analytics).
+	KafkaTopicVideo string
+
+	// KafkaTopicTelemetry топик телеметрии ТС (data-ingestion → analytics).
+	KafkaTopicTelemetry string
 }
 
 // Load читает переменные окружения и возвращает Config с дефолтами (предварительно подгружает .env).
@@ -102,6 +114,19 @@ func Load() Config {
 		if sec, err := strconv.ParseFloat(v, 64); err == nil && sec > 0 {
 			c.MunicipalityActivityTTL = time.Duration(sec * float64(time.Second))
 		}
+	}
+	c.KafkaBootstrap = strings.TrimSpace(os.Getenv("KAFKA_BOOTSTRAP_SERVERS"))
+	c.KafkaConsumerGroup = strings.TrimSpace(os.Getenv("KAFKA_CONSUMER_GROUP"))
+	if c.KafkaConsumerGroup == "" {
+		c.KafkaConsumerGroup = "analytics-ingest"
+	}
+	c.KafkaTopicVideo = strings.TrimSpace(os.Getenv("KAFKA_TOPIC_VIDEO"))
+	if c.KafkaTopicVideo == "" {
+		c.KafkaTopicVideo = "its.video.ingest"
+	}
+	c.KafkaTopicTelemetry = strings.TrimSpace(os.Getenv("KAFKA_TOPIC_TELEMETRY"))
+	if c.KafkaTopicTelemetry == "" {
+		c.KafkaTopicTelemetry = "its.telemetry.ingest"
 	}
 	return c
 }

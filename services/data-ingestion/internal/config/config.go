@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -45,6 +46,10 @@ type Ingest struct {
 
 	// FFmpegPath исполняемый файл ffmpeg.
 	FFmpegPath string `yaml:"ffmpeg_path"`
+
+	// ProcessWorkers параллельных обработчиков кадра (S3 + ML) на одну камеру.
+	// Если 0 — по умолчанию ceil(target_fps), чтобы скорость обработки могла совпасть с дискретизацией ffmpeg.
+	ProcessWorkers int `yaml:"process_workers"`
 }
 
 // Metrics экспорт Prometheus.
@@ -161,6 +166,15 @@ func (c *Root) validate(f *Features) error {
 	}
 	if c.Ingest.TargetFPS <= 0 {
 		c.Ingest.TargetFPS = 3
+	}
+	if c.Ingest.ProcessWorkers <= 0 {
+		c.Ingest.ProcessWorkers = int(math.Ceil(c.Ingest.TargetFPS))
+	}
+	if c.Ingest.ProcessWorkers < 1 {
+		c.Ingest.ProcessWorkers = 1
+	}
+	if c.Ingest.ProcessWorkers > 64 {
+		c.Ingest.ProcessWorkers = 64
 	}
 	if c.Ingest.FFmpegPath == "" {
 		c.Ingest.FFmpegPath = "ffmpeg"

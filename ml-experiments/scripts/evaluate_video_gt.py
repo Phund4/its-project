@@ -10,9 +10,9 @@ import time
 from pathlib import Path
 
 import torch
+from PIL import Image
 from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader, Dataset
-from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -103,7 +103,6 @@ def pick_accident_winner_video_gt(results: dict[str, dict]) -> str:
         results.keys(),
         key=lambda k: (
             results[k]["false_crash_rate"],
-            results[k]["mean_crash_probability"],
             -results[k]["accuracy"],
             -results[k]["f1_normal"],
             -results[k]["fps"],
@@ -116,14 +115,27 @@ def pick_congestion_winner_video_gt(results: dict[str, dict]) -> str:
 
 
 def main() -> None:
+    repo_root = ROOT.parent
+    default_artifacts = repo_root / ".data" / "ml-experiments" / "artifacts"
+    legacy_artifacts = ROOT / "artifacts"
+    default_out_root = repo_root / ".data" / "ml-experiments"
+
     p = argparse.ArgumentParser()
     p.add_argument("--accident-data", type=Path, default=ROOT / "data" / "accident" / "video-gt" / "images")
     p.add_argument("--congestion-data", type=Path, default=ROOT / "data" / "congestion" / "video-gt")
-    p.add_argument("--accident-artifacts", type=Path, default=ROOT / "artifacts" / "accident")
-    p.add_argument("--congestion-artifacts", type=Path, default=ROOT / "artifacts" / "congestion")
+    p.add_argument("--accident-artifacts", type=Path, default=default_artifacts / "accident")
+    p.add_argument("--congestion-artifacts", type=Path, default=default_artifacts / "congestion")
     p.add_argument("--batch-size", type=int, default=16)
-    p.add_argument("--output", type=Path, default=ROOT / "benchmark" / "video_gt_results.json")
+    p.add_argument("--output", type=Path, default=default_out_root / "benchmark" / "video_gt_results.json")
+    p.add_argument("--winners-output", type=Path, default=default_out_root / "winners.json")
     args = p.parse_args()
+
+    # Backward-compatible fallback: if new .data artifacts are missing,
+    # use legacy ml-experiments/artifacts checkpoints.
+    if not args.accident_artifacts.exists() and (legacy_artifacts / "accident").exists():
+        args.accident_artifacts = legacy_artifacts / "accident"
+    if not args.congestion_artifacts.exists() and (legacy_artifacts / "congestion").exists():
+        args.congestion_artifacts = legacy_artifacts / "congestion"
 
     if not (args.accident_data / "test" / "normal").is_dir():
         raise SystemExit(f"run prepare_video_ground_truth.py first; missing {args.accident_data / 'test' / 'normal'}")
@@ -132,6 +144,8 @@ def main() -> None:
 
     accident = evaluate_accident_video_gt(args.accident_data, args.accident_artifacts, args.batch_size)
     congestion = evaluate_congestion_models(args.congestion_data, args.congestion_artifacts, args.batch_size)
+    acc_winner = pick_accident_winner_video_gt(accident)
+    cong_winner = pick_congestion_winner_video_gt(congestion)
 
     payload = {
         "mode": "video_ground_truth_eval",
@@ -146,13 +160,37 @@ def main() -> None:
             "congestion": "target is 0.0 for every frame (closer model output to 0 is better)",
         },
         "tracks": {
-            "accident": {"models": accident, "winner": pick_accident_winner_video_gt(accident)},
-            "congestion": {"models": congestion, "winner": pick_congestion_winner_video_gt(congestion)},
+            "accident": {"models": accident, "winner": acc_winner},
+            "congestion": {"models": congestion, "winner": cong_winner},
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    repo_root = ROOT.parent
+
+    def rel_ckpt(path_str: str) -> str:
+        p = Path(path_str).resolve()
+        try:
+            return str(p.relative_to(repo_root.resolve()))
+        except ValueError:
+            return str(p)
+
+    winners_payload = {
+        "accident": {
+            "winner": acc_winner,
+            "checkpoint": rel_ckpt(accident[acc_winner]["checkpoint"]),
+        },
+        "congestion": {
+            "winner": cong_winner,
+            "checkpoint": rel_ckpt(congestion[cong_winner]["checkpoint"]),
+        },
+    }
+    args.winners_output.parent.mkdir(parents=True, exist_ok=True)
+    args.winners_output.write_text(json.dumps(winners_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
     print(f"wrote {args.output}")
+    print(f"wrote {args.winners_output}")
 
 
 if __name__ == "__main__":

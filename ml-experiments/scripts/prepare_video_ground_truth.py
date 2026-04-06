@@ -17,17 +17,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--frames-dir", type=Path, default=ROOT / "data" / "videos" / "frames")
+    p.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Корень данных (как у rebuild_data_from_videos): frames в data-dir/videos/frames, GT — в data-dir/accident|congestion/...",
+    )
+    p.add_argument("--frames-dir", type=Path, default=None)
     p.add_argument(
         "--accident-images-root",
         type=Path,
-        default=ROOT / "data" / "accident" / "video-gt" / "images",
+        default=None,
         help="Will contain test/normal/*.png symlinks",
     )
     p.add_argument(
         "--congestion-root",
         type=Path,
-        default=ROOT / "data" / "congestion" / "video-gt",
+        default=None,
         help="images/test/*.png symlinks + labels/test.csv",
     )
     p.add_argument(
@@ -37,6 +43,22 @@ def main() -> None:
         help="Regression target for every frame (0 = no congestion proxy).",
     )
     args = p.parse_args()
+
+    data_dir = args.data_dir
+    if data_dir is not None:
+        data_dir = data_dir.resolve()
+        if args.frames_dir is None:
+            args.frames_dir = data_dir / "videos" / "frames"
+        if args.accident_images_root is None:
+            args.accident_images_root = data_dir / "accident" / "video-gt" / "images"
+        if args.congestion_root is None:
+            args.congestion_root = data_dir / "congestion" / "video-gt"
+    if args.frames_dir is None:
+        args.frames_dir = ROOT / "data" / "videos" / "frames"
+    if args.accident_images_root is None:
+        args.accident_images_root = ROOT / "data" / "accident" / "video-gt" / "images"
+    if args.congestion_root is None:
+        args.congestion_root = ROOT / "data" / "congestion" / "video-gt"
 
     frames = sorted(args.frames_dir.rglob("*.png"))
     if not frames:

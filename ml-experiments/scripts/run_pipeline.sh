@@ -12,18 +12,30 @@ VID="${ROOT}/../.data/videos"
 if [[ ! -d "${VID}" ]]; then
   echo "Create ${VID} and add .mp4 files" >&2
   exit 1
-fi                                                                             
-if ! compgen -G "${VID}/*.mp4" > /dev/null; then                               
-  echo "Add at least one .mp4 under ${VID}" >&2                                
-  exit 1                                                                       
+fi
+if ! compgen -G "${VID}/*.mp4" > /dev/null; then
+  echo "Add at least one .mp4 under ${VID}" >&2
+  exit 1
 fi
 
-"$PY" scripts/rebuild_data_from_videos.py --videos-dir "${VID}" --data-dir "${ROOT}/data" --fps 3
-"$PY" scripts/prepare_video_ground_truth.py --frames-dir "${ROOT}/data/videos/frames"
-"$PY" scripts/evaluate_video_gt.py --output "${ROOT}/benchmark/video_gt_results.json"
+OUT_ROOT="${ROOT}/../.data/ml-experiments"
+DATA_DIR="${OUT_ROOT}/data"
+BENCH_DIR="${OUT_ROOT}/benchmark"
+WINNERS_JSON="${OUT_ROOT}/winners.json"
+
+"$PY" scripts/rebuild_data_from_videos.py --videos-dir "${VID}" --data-dir "${DATA_DIR}" --fps 3
+"$PY" scripts/prepare_video_ground_truth.py --data-dir "${DATA_DIR}"
+"$PY" scripts/evaluate_video_gt.py \
+  --accident-data "${DATA_DIR}/accident/video-gt/images" \
+  --congestion-data "${DATA_DIR}/congestion/video-gt" \
+  --output "${BENCH_DIR}/video_gt_results.json" \
+  --winners-output "${WINNERS_JSON}"
 MPL="${PYTHONMPLCONFIGDIR:-${ROOT}/.mplconfig}"
 mkdir -p "${MPL}"
-PYTHONMPLCONFIGDIR="${MPL}" "$PY" scripts/report_video_gt.py --input "${ROOT}/benchmark/video_gt_results.json" --out-dir "${ROOT}/benchmark"
+PYTHONMPLCONFIGDIR="${MPL}" "$PY" scripts/report_video_gt.py \
+  --input "${BENCH_DIR}/video_gt_results.json" \
+  --out-dir "${BENCH_DIR}"
 
-echo "Report: ${ROOT}/benchmark/video_gt_report.md"
-echo "API: uvicorn api.main:app --host 0.0.0.0 --port 8000 --no-access-log"
+echo "Report: ${BENCH_DIR}/video_gt_report.md"
+echo "Winners: ${WINNERS_JSON}"
+echo "Runtime service: cd services/ml-serving && uvicorn api.main:app --host 0.0.0.0 --port 8000 --no-access-log"
