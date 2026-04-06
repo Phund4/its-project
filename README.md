@@ -4,56 +4,49 @@
 
 ```mermaid
 flowchart LR
-  %% -------------------- Producers --------------------
   subgraph Producers["Источники данных"]
-    VideoSim["video-source-sim"]
-    BusGen["bus-telemetry-generator"]
+    VideoSim[video-source-sim]
+    BusGen[bus-telemetry-generator]
   end
 
-  %% -------------------- Core services --------------------
-  subgraph Services["Сервисы (запускаются вручную)"]
-    DI["data-ingestion"]
-    MLS["ml-serving"]
-    MLG["ml-gateway"]
-    AN["analytics"]
-    MP["map-portal"]
+  subgraph Services["Сервисы"]
+    DI[data-ingestion]
+    MLS[ml-serving]
+    MLG[ml-gateway]
+    AN[analytics]
+    MP[map-portal]
   end
 
-  %% -------------------- Infra --------------------
-  subgraph Infra["Инфраструктура (Docker Compose)"]
-    MTX["MediaMTX"]
-    MinIO["MinIO / S3"]
-    KFK["Kafka"]
-    CH["ClickHouse"]
-    Prom["Prometheus"]
-    Graf["Grafana"]
-    KUI["Kafka UI"]
+  subgraph Infra["Инфраструктура"]
+    MTX[MediaMTX]
+    MinIO[MinIO S3]
+    KFK[Kafka]
+    CH[ClickHouse]
+    Prom[Prometheus]
+    Graf[Grafana]
+    KUI[Kafka UI]
   end
 
-  %% -------------------- Video pipeline --------------------
   VideoSim -->|RTSP| MTX
   MTX -->|RTSP| DI
-  DI -->|S3 API (HTTP)| MinIO
-  DI -->|HTTP multipart /v1/process| MLS
-  MLS -->|HTTP JSON /v1/road-events| MLG
-  MLG -->|Kafka produce (video topic)| KFK
-  KFK -->|Kafka consume (video + telemetry topics)| AN
-  AN -->|Native protocol TCP:9000| CH
+  DI -->|HTTP S3 API| MinIO
+  DI -->|HTTP multipart v1 process| MLS
+  MLS -->|HTTP JSON v1 road-events| MLG
+  MLG -->|Kafka produce video topic| KFK
+  KFK -->|Kafka consume video telemetry topics| AN
+  AN -->|TCP 9000 native| CH
 
-  %% -------------------- Telemetry pipeline --------------------
-  BusGen -->|gRPC bus.v1 SendBusTelemetry| DI
-  DI -->|Kafka produce (telemetry topic)| KFK
+  BusGen -->|gRPC bus telemetry| DI
+  DI -->|Kafka produce telemetry topic| KFK
 
-  %% -------------------- Map pipeline --------------------
-  MP -->|gRPC map.v1.MapPortal| AN
-  AN -->|HTTP UI + JSON API| MP
+  MP -->|gRPC map portal| AN
+  AN -->|HTTP UI JSON API| MP
 
-  %% -------------------- Observability --------------------
-  Prom -->|HTTP scrape /metrics| DI
-  Prom -->|HTTP scrape /metrics| MLG
-  Prom -->|HTTP scrape /metrics| AN
-  Prom -->|HTTP scrape /metrics| MP
-  Graf -->|PromQL / datasource| Prom
+  Prom -->|HTTP scrape metrics| DI
+  Prom -->|HTTP scrape metrics| MLG
+  Prom -->|HTTP scrape metrics| AN
+  Prom -->|HTTP scrape metrics| MP
+  Graf -->|PromQL datasource| Prom
   KUI -->|HTTP UI| KFK
 ```
 
