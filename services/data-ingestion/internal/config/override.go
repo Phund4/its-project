@@ -29,6 +29,14 @@ func TelemetryListenAddrFromEnv() string {
 	return ":50051"
 }
 
+// TelemetryHTTPListenAddrFromEnv — адрес HTTP сервера телеметрии (по умолчанию :8094).
+func TelemetryHTTPListenAddrFromEnv() string {
+	if v := strings.TrimSpace(os.Getenv("TELEMETRY_HTTP_LISTEN_ADDR")); v != "" {
+		return v
+	}
+	return ":8094"
+}
+
 // AnalyticsIngestURLFromEnv — полный URL POST /v1/ingest (если телеметрия без Kafka).
 func AnalyticsIngestURLFromEnv() string {
 	return strings.TrimRight(strings.TrimSpace(os.Getenv("ANALYTICS_INGEST_URL")), "/")
@@ -45,4 +53,21 @@ func KafkaTopicTelemetryFromEnv() string {
 		return v
 	}
 	return "its.telemetry.ingest"
+}
+
+// CoordinatorBaseURLFromEnv — адрес coordinator API (обязателен).
+func CoordinatorBaseURLFromEnv() string {
+	return strings.TrimRight(strings.TrimSpace(os.Getenv("COORDINATOR_BASE_URL")), "/")
+}
+
+func CoordinatorZoneIDFromEnv() string {
+	return strings.TrimSpace(os.Getenv("COORDINATOR_ZONE_ID"))
+}
+
+func CoordinatorClusterIDFromEnv() string {
+	return strings.TrimSpace(os.Getenv("COORDINATOR_CLUSTER_ID"))
+}
+
+func CoordinatorInstanceIDFromEnv() string {
+	return strings.TrimSpace(os.Getenv("COORDINATOR_INSTANCE_ID"))
 }

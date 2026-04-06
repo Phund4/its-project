@@ -11,6 +11,7 @@ flowchart LR
 
   subgraph Services["Сервисы"]
     DI[data-ingestion]
+    COORD[coordinator]
     MLS[ml-serving]
     MLG[ml-gateway]
     AN[analytics]
@@ -27,6 +28,8 @@ flowchart LR
   end
 
   VideoSim -->|RTSP| MTX
+  DI -->|HTTP heartbeat assignments| COORD
+  COORD -->|HTTP assignments| DI
   MTX -->|RTSP| DI
   DI -->|HTTP S3 API| MinIO
   DI -->|HTTP multipart v1 process| MLS
@@ -46,6 +49,49 @@ flowchart LR
   Prom -->|HTTP scrape metrics| AN
   Prom -->|HTTP scrape metrics| MP
   Graf -->|PromQL datasource| Prom
+```
+
+## coordinator и data-ingestion (детально)
+
+Два инстанса `data-ingestion` в одном кластере, назначения и резерв из `sources.yaml`. Heartbeat обновляет «живость» владельца; при таймауте primary источник переключается на reserve.
+
+```mermaid
+flowchart TB
+  subgraph COORD[coordinator]
+    SRC[sources.yaml primary reserve]
+    API[GET assignments POST heartbeat]
+    SRC --> API
+  end
+
+  subgraph DI1[data-ingestion ingest-a1]
+    V1[video RTSP ffmpeg S3 ML]
+    T1[gRPC HTTP telemetry]
+  end
+
+  subgraph DI2[data-ingestion ingest-a2]
+    V2[video RTSP ffmpeg S3 ML]
+    T2[gRPC HTTP telemetry]
+  end
+
+  MTX[MediaMTX RTSP]
+  GEN[bus-telemetry-generator]
+
+  DI1 -->|POST heartbeat| API
+  DI2 -->|POST heartbeat| API
+  API -->|GET assignments camera| DI1
+  API -->|GET assignments camera| DI2
+  API -->|GET assignments telemetry| DI1
+  API -->|GET assignments telemetry| DI2
+
+  MTX -->|RTSP по назначению| V1
+  MTX -->|RTSP по назначению| V2
+  GEN -->|gRPC или HTTP| T1
+  GEN -->|gRPC или HTTP| T2
+
+  V1 --> MinIO[(MinIO)]
+  V2 --> MinIO
+  V1 --> MLS[ml-serving]
+  V2 --> MLS
 ```
 
 ## Ключевые протоколы

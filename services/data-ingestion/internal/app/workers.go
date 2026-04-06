@@ -5,12 +5,17 @@ import (
 	"log/slog"
 	"sync"
 
+	"data-ingestion/internal/config"
 	"data-ingestion/internal/core/services"
 )
 
 // StartCameraWorkers запускает воркеры захвата по всем камерам из конфигурации (неблокирующий вызов).
 func StartCameraWorkers(ctx context.Context, deps *Deps, wg *sync.WaitGroup) {
-	for _, cam := range deps.Config.Cameras {
+	StartCameraWorkersWithCameras(ctx, deps, deps.Config.Cameras, wg)
+}
+
+func StartCameraWorkersWithCameras(ctx context.Context, deps *Deps, cameras []config.Camera, wg *sync.WaitGroup) {
+	for _, cam := range cameras {
 		cam := cam
 		wg.Add(1)
 		go func() {

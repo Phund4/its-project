@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 
 	busv1 "data-ingestion/api/bus/v1"
 	"data-ingestion/internal/adapters/analytics"
@@ -18,6 +19,10 @@ type Server struct {
 
 	// Publisher HTTP POST или Kafka в топик телеметрии.
 	Publisher telemetry.Publisher
+
+	// AllowedMunicipalities ограничивает приём телеметрии только назначенными через coordinator муниципалитетами.
+	// Если карта пустая, фильтрация отключена.
+	AllowedMunicipalities map[string]struct{}
 }
 
 // SendBusTelemetry маппит proto → JSON telemetry и доставляет в analytics (HTTP или Kafka).
@@ -37,6 +42,17 @@ func (s *Server) SendBusTelemetry(ctx context.Context, in *busv1.BusTelemetry) (
 	if at == "" {
 		at = "1970-01-01T00:00:00Z"
 	}
+	municipalityID := strings.TrimSpace(in.GetMunicipalityId())
+	if len(s.AllowedMunicipalities) > 0 {
+		if municipalityID == "" {
+			slog.Warn("telemetry dropped: empty municipality_id, coordinator filter is enabled")
+			return &busv1.SendBusTelemetryResponse{}, nil
+		}
+		if _, ok := s.AllowedMunicipalities[municipalityID]; !ok {
+			slog.Warn("telemetry dropped: municipality not assigned", "municipality_id", municipalityID)
+			return &busv1.SendBusTelemetryResponse{}, nil
+		}
+	}
 	tel := map[string]any{
 		"vehicle_id":          in.GetVehicleId(),
 		"route_id":            in.GetRouteId(),
@@ -45,7 +61,7 @@ func (s *Server) SendBusTelemetry(ctx context.Context, in *busv1.BusTelemetry) (
 		"speed_kmh":           in.GetSpeedKmh(),
 		"heading_deg":         in.GetHeadingDeg(),
 		"observed_at_rfc3339": in.GetObservedAtRfc3339(),
-		"municipality_id":     in.GetMunicipalityId(),
+		"municipality_id":     municipalityID,
 	}
 	raw, err := json.Marshal(tel)
 	if err != nil {

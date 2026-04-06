@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// Features режимы работы ingestion (камеры/S3/ML и приём телеметрии по gRPC).
+// Features legacy-флаги.
+// Режимы теперь определяются назначениями из coordinator, а не env-переменными.
 type Features struct {
 	// CamerasEnabled контур RTSP → ffmpeg → S3 → ML.
 	CamerasEnabled bool
@@ -38,9 +39,9 @@ func envBool(key string, defaultVal bool) bool {
 // FeaturesFromEnv читает флаги: по умолчанию камеры+S3+ML включены, телеметрия gRPC выключена.
 func FeaturesFromEnv() Features {
 	return Features{
-		CamerasEnabled: envBool("CAMERAS_ENABLED", true),
-		S3Enabled:      envBool("S3_ENABLED", true),
-		MLEnabled:      envBool("ML_ENABLED", true),
-		TelemetryGRPC:  envBool("TELEMETRY_GRPC_ENABLED", false),
+		CamerasEnabled: true,
+		S3Enabled:      true,
+		MLEnabled:      true,
+		TelemetryGRPC:  true,
 	}
 }

@@ -103,8 +103,7 @@ func Load(path string) (*Root, error) {
 	}
 	c.ConfigFile = path
 	ApplyEnvOverrides(&c)
-	f := FeaturesFromEnv()
-	if err := c.validate(&f); err != nil {
+	if err := c.validate(); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -127,37 +126,8 @@ func LoadFromEnv() (*Root, error) {
 	return Load(p)
 }
 
-// validate проверяет обязательные поля с учётом фиче-флагов и подставляет значения по умолчанию.
-func (c *Root) validate(f *Features) error {
-	if f == nil {
-		def := FeaturesFromEnv()
-		f = &def
-	}
-	if !f.CamerasEnabled && !f.TelemetryGRPC {
-		return fmt.Errorf("включите CAMERAS_ENABLED и/или TELEMETRY_GRPC_ENABLED")
-	}
-	if f.CamerasEnabled {
-		if !f.S3Enabled || !f.MLEnabled {
-			return fmt.Errorf("контур камер требует S3_ENABLED=true и ML_ENABLED=true")
-		}
-		if c.S3.Endpoint == "" {
-			return fmt.Errorf("s3.endpoint is required when CAMERAS_ENABLED")
-		}
-		if c.S3.Bucket == "" {
-			return fmt.Errorf("s3.bucket is required when CAMERAS_ENABLED")
-		}
-		if c.ML.BaseURL == "" {
-			return fmt.Errorf("ml.base_url is required when CAMERAS_ENABLED")
-		}
-		if len(c.Cameras) == 0 {
-			return fmt.Errorf("cameras: нужен хотя бы один источник; для списка RTSP укажите CONFIG_PATH=./config.cameras.yaml")
-		}
-		for i, cam := range c.Cameras {
-			if cam.SegmentID == "" || cam.CameraID == "" || cam.RTSPURL == "" {
-				return fmt.Errorf("cameras[%d]: segment_id, camera_id, rtsp_url are required", i)
-			}
-		}
-	}
+// validate проверяет базовую конфигурацию и подставляет значения по умолчанию.
+func (c *Root) validate() error {
 	if c.ML.ProcessPath == "" {
 		c.ML.ProcessPath = "/v1/process"
 	}
