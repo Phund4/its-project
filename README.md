@@ -23,6 +23,7 @@ flowchart LR
     MinIO[MinIO S3]
     KFK[Kafka]
     CH[ClickHouse]
+    PG[PostgreSQL]
     Prom[Prometheus]
     Graf[Grafana]
   end
@@ -30,6 +31,7 @@ flowchart LR
   VideoSim -->|RTSP| MTX
   DI -->|HTTP heartbeat assignments| COORD
   COORD -->|HTTP assignments| DI
+  COORD -->|state read/write| PG
   MTX -->|RTSP| DI
   DI -->|HTTP S3 API| MinIO
   DI -->|HTTP multipart v1 process| MLS
@@ -62,6 +64,7 @@ flowchart TB
     API[GET assignments POST heartbeat]
     SRC --> API
   end
+  PG[(PostgreSQL)]
 
   subgraph DI1[data-ingestion ingest-a1]
     V1[video RTSP ffmpeg S3 ML]
@@ -78,6 +81,7 @@ flowchart TB
 
   DI1 -->|POST heartbeat| API
   DI2 -->|POST heartbeat| API
+  API -->|state read/write| PG
   API -->|GET road_segment_video| DI1
   API -->|GET road_segment_video| DI2
   API -->|GET vehicle_bus_telemetry| DI1

@@ -40,7 +40,7 @@ docker compose --profile ingest start mediamtx video-source-sim
 docker compose --profile ingest rm -sf mediamtx video-source-sim
 ```
 
-Данные **ClickHouse**, **Kafka**, **Zookeeper**, **Elasticsearch**, **MinIO**, **Prometheus** (TSDB) и **Grafana** (в том числе дашборды и настройки, созданные в UI) хранятся в именованных томах и переживают перезапуск контейнеров. Конфиг Prometheus по-прежнему файл [`prometheus/prometheus.yml`](prometheus/prometheus.yml); после правок: `docker compose restart prometheus` или lifecycle reload.
+Данные **PostgreSQL**, **ClickHouse**, **Kafka**, **Zookeeper**, **Elasticsearch**, **MinIO**, **Prometheus** (TSDB) и **Grafana** (в том числе дашборды и настройки, созданные в UI) хранятся в именованных томах и переживают перезапуск контейнеров. Конфиг Prometheus по-прежнему файл [`prometheus/prometheus.yml`](prometheus/prometheus.yml); после правок: `docker compose restart prometheus` или lifecycle reload.
 
 ## Сервисы и подключение
 
