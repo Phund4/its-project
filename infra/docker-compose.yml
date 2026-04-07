@@ -2,6 +2,27 @@
 name: traffic-infra
 
 services:
+  postgres:
+    image: postgres:16
+    hostname: postgres
+    environment:
+      POSTGRES_DB: coordinator
+      POSTGRES_USER: coordinator
+      POSTGRES_PASSWORD: coordinator
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - its
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coordinator -d coordinator"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.4
     hostname: zookeeper
@@ -113,6 +134,49 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:24.8
+    hostname: clickhouse-init
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >
+      "clickhouse-client --host clickhouse --port 9000 --query \"
+      CREATE TABLE IF NOT EXISTS default.road_incidents
+      (
+          observed_at DateTime64(3, 'UTC'),
+          segment_id LowCardinality(String),
+          camera_id LowCardinality(String),
+          s3_key String,
+          crash_probability Float64,
+          incident_label LowCardinality(String),
+          raw_ml String
+      )
+      ENGINE = MergeTree
+      ORDER BY (segment_id, camera_id, observed_at);
+      CREATE TABLE IF NOT EXISTS default.road_congestion
+      (
+          observed_at DateTime64(3, 'UTC'),
+          segment_id LowCardinality(String),
+          camera_id LowCardinality(String),
+          s3_key String,
+          congestion_score Float64,
+          raw_ml String
+      )
+      ENGINE = MergeTree
+      ORDER BY (segment_id, camera_id, observed_at);
+      \""
+    restart: "no"
+    networks:
+      - its
 
   # S3-совместимое API (локальный объектный стор для кадров видео).
   minio:
@@ -127,6 +191,26 @@ services:
     ports:
       - "9050:9000"
       - "9051:9001"
+    networks:
+      - its
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/ready >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-11-17T19-35-25Z
+    hostname: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >
+      "mc alias set local http://minio:9000 minioadmin minioadmin &&
+       mc mb -p local/its-frames || true"
+    restart: "no"
     networks:
       - its
 
@@ -192,6 +276,32 @@ services:
     networks:
       - its
 
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    hostname: blackbox-exporter
+    command:
+      - "--config.file=/etc/blackbox_exporter/config.yml"
+    volumes:
+      - ./blackbox/config.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "9115:9115"
+    networks:
+      - its
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    hostname: cadvisor
+    privileged: true
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - its
+
   grafana:
     image: grafana/grafana:11.3.0
     hostname: grafana
@@ -214,6 +324,7 @@ networks:
     name: traffic-its
 
 volumes:
+  postgres-data:
   zookeeper-data:
   kafka-data:
   es-data:

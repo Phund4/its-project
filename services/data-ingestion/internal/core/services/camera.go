@@ -51,6 +51,7 @@ func RunCamera(
 	prefix := strings.Trim(s3Prefix, "/")
 	var frameNo atomic.Uint64
 	var lastUpstreamLog time.Time
+	var lastMLLog time.Time
 	backoff := time.Duration(reconnectBackoffSec) * time.Second
 
 	for ctx.Err() == nil {
@@ -123,7 +124,7 @@ func RunCamera(
 					}
 					if err := mlc.PostProcess(ctx, frame, "frame.jpg", meta); err != nil {
 						metrics.OperationErrors.WithLabelValues("ml_process").Inc()
-						log.Warn("ml process", "err", err)
+						logSourceIssueThrottled(&lastMLLog, log, "ml process", "err", err)
 					}
 
 					if n%frameLogEveryN == 0 {

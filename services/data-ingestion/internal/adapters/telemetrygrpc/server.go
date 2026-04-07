@@ -20,8 +20,7 @@ type Server struct {
 	// Publisher HTTP POST или Kafka в топик телеметрии.
 	Publisher telemetry.Publisher
 
-	// AllowedMunicipalities ограничивает приём телеметрии только назначенными через coordinator муниципалитетами.
-	// Если карта пустая, фильтрация отключена.
+	// AllowedMunicipalities ограничивает приём по списку муниципалитетов; nil или пустая карта — любая телеметрия (как в каталоге vehicle_bus_telemetry).
 	AllowedMunicipalities map[string]struct{}
 }
 

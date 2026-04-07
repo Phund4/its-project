@@ -7,11 +7,11 @@
 - HTTP `POST /v1/telemetry` (порт `TELEMETRY_HTTP_LISTEN_ADDR`, по умолчанию `:8094`).
 
 Оба входа маппят данные в JSON с полем **`telemetry`** (не `ml`) и пересылают в analytics/Kafka.  
-В телеметрии должен быть `municipality_id`; при фильтре coordinator принимаются только назначенные муниципалитеты.
+Каталог в **coordinator** задаёт **`data_class`**: для `vehicle_bus_telemetry` фильтра по списку городов нет — районы и идентификаторы в полезной нагрузке.
 
 Генератор [`data-generators/bus-telemetry`](../../data-generators/bus-telemetry): переменная **`BUS_TELEMETRY_MUNICIPALITY_ID`** (по умолчанию `msk`) и координаты вокруг центра выбранного города.
 
-**Камеры:** сегменты, `camera_id` и **`rtsp_url`** задаются назначениями в **coordinator** (`source_kind=camera`). Если процесс **ingestion** крутится в той же Docker-сети, что и MediaMTX, в `rtsp_url` укажите хост **`mediamtx`** вместо `localhost` (например `rtsp://mediamtx:8554/cam-01`).
+**Камеры:** сегменты, `camera_id` и **`rtsp_url`** задаются назначениями в **coordinator** (`data_class=road_segment_video`). Если процесс **ingestion** крутится в той же Docker-сети, что и MediaMTX, в `rtsp_url` укажите хост **`mediamtx`** вместо `localhost` (например `rtsp://mediamtx:8554/cam-01`).
 
 **Телеметрия CAN/GPS и т.п.** этим сервисом не обрабатывается и для её разработки **запускать видео-поток, MinIO, этот сервис и RTSP не требуется** — заводите отдельный конвейер (например Kafka → свой consumer → хранилище). См. [корневой README](../../README.md).
 
@@ -61,14 +61,13 @@
 ## Запуск
 
 `data-ingestion` запускается единым процессом `go run ./cmd/ingest`.
-Дальше coordinator назначает:
-- `source_kind=camera` — включает video pipeline;
-- `source_kind=telemetry` — включает telemetry gRPC pipeline.
+Дальше coordinator назначает источники по полю **`data_class`** в `sources.yaml`:
+- **`road_segment_video`** — включает video pipeline (RTSP → S3 → ML);
+- **`vehicle_bus_telemetry`** — включает приём gRPC/HTTP телеметрии и форвард в analytics/Kafka.
 
-В видео-режиме список камер берётся только из `coordinator /v1/assignments?source_kind=camera`.  
-В telemetry gRPC режиме список разрешённых муниципалитетов берётся из `coordinator /v1/assignments?source_kind=telemetry` и телеметрия из других муниципалитетов отбрасывается.
+Список камер: `GET /v1/assignments?...&data_class=road_segment_video`. Телеметрия ТС: `data_class=vehicle_bus_telemetry` (при назначении инстансу включается контур без фильтра по городам из YAML).
 
-Нужны `COORDINATOR_BASE_URL` + `COORDINATOR_ZONE_ID` + `COORDINATOR_CLUSTER_ID` + `COORDINATOR_INSTANCE_ID`. Если coordinator недоступен или вернул пустые назначения по активному режиму, сервис завершится с ошибкой.
+Нужны `COORDINATOR_BASE_URL` + `COORDINATOR_ZONE_ID` + `COORDINATOR_CLUSTER_ID` + `COORDINATOR_INSTANCE_ID`. При старте сервис может работать в standby (без активных назначений) и ждать команд от coordinator.
 
 Дальше по цепочке: MinIO → **`ml-experiments`** → **`ml-gateway`** при необходимости (см. [ml-gateway](../ml-gateway/README.md)).
 

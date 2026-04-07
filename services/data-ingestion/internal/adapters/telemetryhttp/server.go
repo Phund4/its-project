@@ -17,8 +17,7 @@ import (
 type Server struct {
 	Publisher telemetry.Publisher
 
-	// AllowedMunicipalities ограничивает приём телеметрии только назначенными через coordinator муниципалитетами.
-	// Если карта пустая, фильтрация отключена.
+	// AllowedMunicipalities ограничивает приём по списку муниципалитетов; nil или пустая карта — любая телеметрия (vehicle_bus_telemetry в coordinator).
 	AllowedMunicipalities map[string]struct{}
 }
 

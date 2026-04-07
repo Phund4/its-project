@@ -28,9 +28,9 @@ func Run(ctx context.Context, listenAddr string, a *app.App) error {
 		zoneID := strings.TrimSpace(r.URL.Query().Get("zone_id"))
 		clusterID := strings.TrimSpace(r.URL.Query().Get("cluster_id"))
 		instanceID := strings.TrimSpace(r.URL.Query().Get("instance_id"))
-		sourceKind := strings.TrimSpace(r.URL.Query().Get("source_kind"))
+		dataClass := strings.TrimSpace(r.URL.Query().Get("data_class"))
 		writeJSON(w, http.StatusOK, map[string]any{
-			"items": a.Assignments(zoneID, clusterID, instanceID, sourceKind),
+			"items": a.Assignments(zoneID, clusterID, instanceID, dataClass),
 		})
 	})
 
@@ -51,6 +51,11 @@ func Run(ctx context.Context, listenAddr string, a *app.App) error {
 
 	mux.HandleFunc("GET /v1/workers", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"items": a.Heartbeats()})
+	})
+
+	mux.HandleFunc("GET /v1/ingestion_instances", func(w http.ResponseWriter, r *http.Request) {
+		zoneID := strings.TrimSpace(r.URL.Query().Get("zone_id"))
+		writeJSON(w, http.StatusOK, map[string]any{"items": a.IngestionInstances(zoneID)})
 	})
 
 	srv := &http.Server{

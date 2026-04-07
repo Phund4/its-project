@@ -53,12 +53,12 @@ flowchart LR
 
 ## coordinator и data-ingestion (детально)
 
-Два инстанса `data-ingestion` в одном кластере, назначения и резерв из `sources.yaml`. Heartbeat обновляет «живость» владельца; при таймауте primary источник переключается на reserve.
+Два инстанса `data-ingestion` в одном кластере. Список инстансов — в `ingestion_instances.yaml` у coordinator; `sources.yaml` — только каталог источников. Назначение — по загрузке среди живых инстансов. В production-сценарии coordinator работает в active-active и читает общее состояние из PostgreSQL.
 
 ```mermaid
 flowchart TB
   subgraph COORD[coordinator]
-    SRC[sources.yaml primary reserve]
+    SRC[sources.yaml + ingestion_instances.yaml]
     API[GET assignments POST heartbeat]
     SRC --> API
   end
@@ -78,10 +78,10 @@ flowchart TB
 
   DI1 -->|POST heartbeat| API
   DI2 -->|POST heartbeat| API
-  API -->|GET assignments camera| DI1
-  API -->|GET assignments camera| DI2
-  API -->|GET assignments telemetry| DI1
-  API -->|GET assignments telemetry| DI2
+  API -->|GET road_segment_video| DI1
+  API -->|GET road_segment_video| DI2
+  API -->|GET vehicle_bus_telemetry| DI1
+  API -->|GET vehicle_bus_telemetry| DI2
 
   MTX -->|RTSP по назначению| V1
   MTX -->|RTSP по назначению| V2
@@ -102,3 +102,9 @@ flowchart TB
 - `gRPC` — телеметрия автобусов (`bus.v1`) и API карты (`map.v1`).
 - `S3 API` — сохранение кадров в `MinIO`.
 - `Prometheus scrape` — сбор метрик, визуализация через `Grafana`.
+
+## Мониторинг и health
+
+- Основной дашборд: **`Kafka и сервисы`** (Grafana), в нём объединены Kafka/бизнес-метрики и runtime-блок.
+- Health-check `coordinator`/`ml-serving` собирается через `blackbox-exporter`.
+- CPU/RAM по docker-сервисам собирается через `cadvisor`.

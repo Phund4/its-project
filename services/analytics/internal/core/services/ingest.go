@@ -240,3 +240,4 @@ func (s *IngestService) applyTelemetryToPortalHub(raw json.RawMessage) {
 		ObservedAtRfc3339: strings.TrimSpace(at),
 	})
 }
+

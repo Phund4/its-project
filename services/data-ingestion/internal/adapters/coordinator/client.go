@@ -26,17 +26,17 @@ func New(baseURL string, timeout time.Duration) *Client {
 }
 
 type assignmentItem struct {
-	SegmentID      string `json:"segment_id"`
-	CameraID       string `json:"camera_id"`
-	RTSPURL        string `json:"rtsp_url"`
-	MunicipalityID string `json:"municipality_id"`
+	DataClass string `json:"data_class"`
+	SegmentID string `json:"segment_id"`
+	CameraID  string `json:"camera_id"`
+	RTSPURL   string `json:"rtsp_url"`
 }
 
 type assignmentsResp struct {
 	Items []assignmentItem `json:"items"`
 }
 
-func (c *Client) fetchAssignments(ctx context.Context, zoneID, clusterID, instanceID, sourceKind string) ([]assignmentItem, error) {
+func (c *Client) fetchAssignments(ctx context.Context, zoneID, clusterID, instanceID, dataClass string) ([]assignmentItem, error) {
 	u, err := url.Parse(c.base + "/v1/assignments")
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func (c *Client) fetchAssignments(ctx context.Context, zoneID, clusterID, instan
 	q.Set("zone_id", zoneID)
 	q.Set("cluster_id", clusterID)
 	q.Set("instance_id", instanceID)
-	q.Set("source_kind", sourceKind)
+	q.Set("data_class", dataClass)
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -68,7 +68,7 @@ func (c *Client) fetchAssignments(ctx context.Context, zoneID, clusterID, instan
 }
 
 func (c *Client) FetchCameraAssignments(ctx context.Context, zoneID, clusterID, instanceID string) ([]config.Camera, error) {
-	items, err := c.fetchAssignments(ctx, zoneID, clusterID, instanceID, "camera")
+	items, err := c.fetchAssignments(ctx, zoneID, clusterID, instanceID, config.DataClassRoadSegmentVideo)
 	if err != nil {
 		return nil, err
 	}
@@ -86,25 +86,13 @@ func (c *Client) FetchCameraAssignments(ctx context.Context, zoneID, clusterID, 
 	return out, nil
 }
 
-func (c *Client) FetchTelemetryMunicipalities(ctx context.Context, zoneID, clusterID, instanceID string) ([]string, error) {
-	items, err := c.fetchAssignments(ctx, zoneID, clusterID, instanceID, "telemetry")
+// HasVehicleBusTelemetryAssignment true, если этому инстансу назначен хотя бы один источник vehicle_bus_telemetry.
+func (c *Client) HasVehicleBusTelemetryAssignment(ctx context.Context, zoneID, clusterID, instanceID string) (bool, error) {
+	items, err := c.fetchAssignments(ctx, zoneID, clusterID, instanceID, config.DataClassVehicleBusTelemetry)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	out := make([]string, 0, len(items))
-	seen := make(map[string]struct{}, len(items))
-	for _, it := range items {
-		m := strings.TrimSpace(it.MunicipalityID)
-		if m == "" {
-			continue
-		}
-		if _, ok := seen[m]; ok {
-			continue
-		}
-		seen[m] = struct{}{}
-		out = append(out, m)
-	}
-	return out, nil
+	return len(items) > 0, nil
 }
 
 func (c *Client) SendHeartbeat(ctx context.Context, zoneID, clusterID, instanceID string, assignments int) error {

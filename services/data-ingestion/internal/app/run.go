@@ -31,17 +31,24 @@ func Run(rootCtx context.Context) error {
 	if zoneID == "" || clusterID == "" || instanceID == "" {
 		return fmt.Errorf("set COORDINATOR_ZONE_ID, COORDINATOR_CLUSTER_ID, COORDINATOR_INSTANCE_ID")
 	}
+	// Bootstrap-heartbeat: без него coordinator не считает инстанс "живым",
+	// и при холодном старте может вернуть пустые назначения.
+	if err := deps.Coordinator.SendHeartbeat(rootCtx, zoneID, clusterID, instanceID, 0); err != nil {
+		slog.Warn("coordinator bootstrap heartbeat failed", "err", err)
+	}
 
 	cameras, err := deps.Coordinator.FetchCameraAssignments(rootCtx, zoneID, clusterID, instanceID)
 	if err != nil {
-		return fmt.Errorf("coordinator camera assignments: %w", err)
+		slog.Warn("coordinator camera assignments unavailable, starting in standby", "err", err)
+		cameras = nil
 	}
-	telemetryMunicipalities, err := deps.Coordinator.FetchTelemetryMunicipalities(rootCtx, zoneID, clusterID, instanceID)
+	hasBusTelemetry, err := deps.Coordinator.HasVehicleBusTelemetryAssignment(rootCtx, zoneID, clusterID, instanceID)
 	if err != nil {
-		return fmt.Errorf("coordinator telemetry assignments: %w", err)
+		slog.Warn("coordinator telemetry assignments unavailable, starting in standby", "err", err)
+		hasBusTelemetry = false
 	}
-	if len(cameras) == 0 && len(telemetryMunicipalities) == 0 {
-		return fmt.Errorf("coordinator returned no assignments for zone=%s cluster=%s instance=%s", zoneID, clusterID, instanceID)
+	if len(cameras) == 0 && !hasBusTelemetry {
+		slog.Info("no assignments yet, data-ingestion is running in standby", "zone", zoneID, "cluster", clusterID, "instance", instanceID)
 	}
 	if len(cameras) > 0 {
 		if err := InitVideoPipeline(rootCtx, deps); err != nil {
@@ -50,27 +57,26 @@ func Run(rootCtx context.Context) error {
 		logArgs = append(logArgs, "rtsp_sources", len(cameras))
 		slog.Info("coordinator camera assignments applied", "assigned_sources", len(cameras), "zone", zoneID, "cluster", clusterID, "instance", instanceID)
 	}
-	if len(telemetryMunicipalities) > 0 {
+	if hasBusTelemetry {
 		if err := InitTelemetryPipeline(deps); err != nil {
 			return err
 		}
-		allow := make(map[string]struct{}, len(telemetryMunicipalities))
-		for _, m := range telemetryMunicipalities {
-			allow[m] = struct{}{}
-		}
-		deps.TelemetryGRPC.AllowedMunicipalities = allow
-		deps.TelemetryHTTP.AllowedMunicipalities = allow
+		deps.TelemetryGRPC.AllowedMunicipalities = nil
+		deps.TelemetryHTTP.AllowedMunicipalities = nil
 		logArgs = append(
 			logArgs,
 			"telemetry_grpc", true,
 			"telemetry_grpc_listen", deps.TelemetryListenAddr,
 			"telemetry_http", true,
 			"telemetry_http_listen", deps.TelemetryHTTPListenAddr,
-			"telemetry_municipalities", len(telemetryMunicipalities),
+			"data_class", config.DataClassVehicleBusTelemetry,
 		)
-		slog.Info("coordinator telemetry assignments applied", "assigned_municipalities", len(telemetryMunicipalities), "zone", zoneID, "cluster", clusterID, "instance", instanceID)
+		slog.Info("coordinator telemetry assignments applied", "zone", zoneID, "cluster", clusterID, "instance", instanceID)
 	}
-	assignmentCount := len(cameras) + len(telemetryMunicipalities)
+	assignmentCount := len(cameras)
+	if hasBusTelemetry {
+		assignmentCount++
+	}
 	if err := deps.Coordinator.SendHeartbeat(rootCtx, zoneID, clusterID, instanceID, assignmentCount); err != nil {
 		slog.Warn("coordinator heartbeat failed", "err", err)
 	}

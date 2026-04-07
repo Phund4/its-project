@@ -32,7 +32,7 @@ type Deps struct {
 	// TelemetryPublisher HTTP или Kafka для gRPC телеметрии.
 	TelemetryPublisher telemetry.Publisher
 
-	// TelemetryGRPC сервер gRPC BusTelemetry при TELEMETRY_GRPC_ENABLED.
+	// TelemetryGRPC сервер gRPC BusTelemetry (включается назначением data_class=vehicle_bus_telemetry).
 	TelemetryGRPC *telemetrygrpc.Server
 
 	// TelemetryListenAddr адрес :port для gRPC телеметрии.

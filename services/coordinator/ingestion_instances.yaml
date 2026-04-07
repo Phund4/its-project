@@ -1,0 +1,8 @@
+zone_workers:
+  zone-a:
+    - cluster_id: "cluster-1"
+      instance_id: "ingest-a1"
+      url: "http://127.0.0.1:9091/metrics"
+    - cluster_id: "cluster-1"
+      instance_id: "ingest-a2"
+      url: "http://127.0.0.1:9092/metrics"

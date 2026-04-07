@@ -64,15 +64,20 @@ docker compose --profile ingest rm -sf mediamtx video-source-sim
 
 - **MinIO (S3)** — API с хоста: `http://localhost:9050`; консоль: http://localhost:9051. Учётные данные: **`minioadmin` / `minioadmin`**. Внутри сети: endpoint `http://minio:9000`.
 
-- **Prometheus** — http://localhost:9090. Конфиг [`prometheus/prometheus.yml`](prometheus/prometheus.yml) опрашивает **процессы на хосте** (`data_ingestion` :9091, `ml_gateway` :8092, `analytics` :8093) через **`host.docker.internal`** (у сервиса `prometheus` задан `extra_hosts`). Это только мониторинг: сами Go-сервисы **не** зависят от Docker. Нет процесса — таргет будет DOWN. Метрики: `data_ingestion_*`, `ml_gateway_*`, `analytics_*` и т.д.
+- **Prometheus** — http://localhost:9090. Конфиг [`prometheus/prometheus.yml`](prometheus/prometheus.yml) опрашивает **процессы на хосте** (`data_ingestion` :9091, `ml_gateway` :8092, `analytics` :8093, `map_portal` :8096) через **`host.docker.internal`** (у сервиса `prometheus` задан `extra_hosts`), а также:
+  - `blackbox-exporter` (HTTP health-check для `coordinator` и `ml-serving`);
+  - `cadvisor` (CPU/RAM по docker-контейнерам).
+  Нет процесса — target в DOWN, это нормально.
 
-- **Grafana** — http://localhost:3000, логин по умолчанию **`admin` / `admin`**. Провижининг из [`grafana/provisioning/`](grafana/provisioning/) (папка дашбордов **Traffic**); созданные вручную дашборды и источники сохраняются в томе **`grafana-data`**.
+- **Grafana** — http://localhost:3000, логин по умолчанию **`admin` / `admin`**. Провижининг из [`grafana/provisioning/`](grafana/provisioning/) (папка дашбордов **Traffic**); созданные вручную дашборды и источники сохраняются в томе **`grafana-data`**. В дашборде **`Kafka и сервисы`** добавлены:
+  - `UP/DOWN` для `coordinator :8098`, `coordinator :8099`, `ml-serving :8000`;
+  - CPU/RAM по docker-контейнерам из `cadvisor`.
 
 - **MediaMTX** (профиль `ingest`) — `rtsp://localhost:8554`. Запуск: `docker compose --profile ingest up -d --build mediamtx video-source-sim`.
 
 - **video-source-sim** (профиль `ingest`) — читает `../.data/videos/*.mp4`; при отсутствии файлов — синтетические потоки.
 
-- **bus-telemetry-generator** (профиль **`telemetry`**) — контейнер-генератор: раз в **5 с** шлёт gRPC на **`host.docker.internal:50051`** (на хосте должны быть запущены **`data_ingestion`** с `TELEMETRY_GRPC_ENABLED=true` и **`analytics`**). См. [`services/data-ingestion/README.md`](../services/data-ingestion/README.md).
+- **bus-telemetry-generator** (профиль **`telemetry`**) — контейнер-генератор: раз в **5 с** шлёт gRPC на **`host.docker.internal:50051`** (на хосте должны быть запущены **`data_ingestion`** и **`analytics`**). См. [`services/data-ingestion/README.md`](../services/data-ingestion/README.md).
 
 Профили **`ingest`** (MediaMTX + видео-симулятор) и **`telemetry`** (только генератор автобуса) заданы отдельно. Примеры из каталога `infra`:
 
@@ -86,4 +91,8 @@ docker compose --profile ingest --profile telemetry up -d
 
 **analytics**, **data-ingestion**, **ml-gateway**, **map-portal** (карта HTTP **8096**, к analytics по gRPC **8097** — см. `MAP_GRPC_LISTEN_ADDR` / `ANALYTICS_GRPC_ADDR`), **ml-experiments** запускаются вручную из консоли (см. `.env` в каталогах сервисов): [`services/analytics`](../services/analytics/README.md), [`services/data-ingestion`](../services/data-ingestion/README.md), [`services/ml-gateway`](../services/ml-gateway/README.md), [`services/map-portal`](../services/map-portal/README.md). Для видео: ClickHouse → **analytics** → **ml-gateway** → **ml-experiments** → **data-ingestion**. Для телеметрии автобуса: **analytics** + **data-ingestion** (режим gRPC, `ANALYTICS_INGEST_URL=http://127.0.0.1:8093/v1/ingest`), затем при необходимости **`docker compose --profile telemetry up -d bus-telemetry-generator`**.
 
-Тома данных Compose (список имён): `zookeeper-data`, `kafka-data`, `es-data`, `clickhouse-data`, `minio-data`, `prometheus-data`, `grafana-data`.
+При старте compose автоматически выполняются one-shot инициализаторы:
+- `clickhouse-init` — создаёт таблицы `default.road_incidents` и `default.road_congestion`;
+- `minio-init` — создаёт бакет `its-frames`.
+
+Тома данных Compose (список имён): `postgres-data`, `zookeeper-data`, `kafka-data`, `es-data`, `clickhouse-data`, `minio-data`, `prometheus-data`, `grafana-data`.
