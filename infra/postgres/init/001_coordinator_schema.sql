@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS ingestion_instances (
 
 CREATE INDEX IF NOT EXISTS idx_ingestion_instances_zone ON ingestion_instances(zone_id);
 
-CREATE TABLE IF NOT EXISTS worker_heartbeats (
+CREATE TABLE IF NOT EXISTS worker_statuses (
     zone_id TEXT NOT NULL,
     cluster_id TEXT NOT NULL,
     instance_id TEXT NOT NULL,

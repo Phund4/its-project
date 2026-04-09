@@ -5,15 +5,15 @@
 Сейчас покрывает:
 - каталог источников по зонам;
 - выдачу назначений (`assignments`) для конкретного ingestion-инстанса;
-- heartbeat от ingestion-инстансов;
-- **пул воркеров по зоне** (`zone_workers`): назначение источника — среди живых инстансов зоны по **минимальной загрузке** (heartbeat: `assignments` + `load`), при равенстве — порядок в списке зоны.
+- обновления worker status от ingestion-инстансов;
+- **пул воркеров по зоне** (`zone_workers`): назначение источника — среди живых инстансов зоны по **минимальной загрузке** (worker status: `assignments` + `load`), при равенстве — порядок в списке зоны.
 
 ## Конфигурация
 
 - `LISTEN_ADDR` — адрес HTTP (по умолчанию `:8098`)
 - `SOURCES_CONFIG_PATH` — путь к YAML только с **источниками** (по умолчанию `sources.yaml`)
 - `INGESTION_INSTANCES_PATH` — путь к YAML с **инстансами data-ingestion** по зонам (по умолчанию `ingestion_instances.yaml`)
-- `HEARTBEAT_TIMEOUT_SEC` — сколько секунд heartbeat считается свежим (по умолчанию `30`)
+- `COORDINATOR_WORKER_STATUS_TIMEOUT_SEC` — сколько секунд worker status считается свежим (по умолчанию `30`)
 - `DATABASE_URL` — строка подключения к PostgreSQL (если пуста, режим in-memory)
 
 Файл `.env` в каталоге `services/coordinator` подхватывается автоматически (можно переопределить через `ENV_FILE`).
@@ -35,7 +35,7 @@
 - `GET /v1/sources?zone_id=zone-a`
 - `GET /v1/assignments?zone_id=zone-a&cluster_id=cluster-1&instance_id=ingest-a1&data_class=road_segment_video`
 - `GET /v1/assignments?zone_id=zone-a&cluster_id=cluster-1&instance_id=ingest-a1&data_class=vehicle_bus_telemetry`
-- `POST /v1/workers/heartbeat`
+- `POST /v1/workers/status`
 - `GET /v1/workers`
 - `GET /v1/ingestion_instances?zone_id=zone-a` — каталог инстансов из `ingestion_instances.yaml` (в т.ч. поле `url`)
 
@@ -47,8 +47,8 @@
 ## Репликация coordinator (active-active)
 
 - Coordinator запускается в 2+ репликах за одним балансировщиком (L4/L7), все реплики подключены к **одной PostgreSQL**.
-- В PostgreSQL хранится общее состояние: `sources`, `ingestion_instances`, `worker_heartbeats`.
-- Любая реплика принимает heartbeat и пишет в `worker_heartbeats`; любая реплика на `GET /v1/assignments` читает общее состояние и считает назначение детерминированно.
+- В PostgreSQL хранится общее состояние: `sources`, `ingestion_instances`, `worker_statuses`.
+- Любая реплика принимает worker status и пишет в `worker_statuses`; любая реплика на `GET /v1/assignments` читает общее состояние и считает назначение детерминированно.
 - Для клиента (`data-ingestion`) coordinator выглядит как единая точка (`COORDINATOR_BASE_URL` балансировщика), без «мастера».
 - При падении одной реплики остальные продолжают работу без failover-логики на уровне приложения.
 

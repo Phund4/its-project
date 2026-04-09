@@ -95,20 +95,20 @@ func (c *Client) HasVehicleBusTelemetryAssignment(ctx context.Context, zoneID, c
 	return len(items) > 0, nil
 }
 
-func (c *Client) SendHeartbeat(ctx context.Context, zoneID, clusterID, instanceID string, assignments int) error {
+func (c *Client) SendWorkerStatus(ctx context.Context, zoneID, clusterID, instanceID string, assignments int) error {
 	body := map[string]any{
-		"zone_id":      zoneID,
-		"cluster_id":   clusterID,
-		"instance_id":  instanceID,
-		"assignments":  assignments,
-		"observed_at":  time.Now().UTC(),
-		"load":         0.0,
+		"zone_id":     zoneID,
+		"cluster_id":  clusterID,
+		"instance_id": instanceID,
+		"assignments": assignments,
+		"observed_at": time.Now().UTC(),
+		"load":        0.0,
 	}
 	b, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/v1/workers/heartbeat", bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/v1/workers/status", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (c *Client) SendHeartbeat(ctx context.Context, zoneID, clusterID, instanceI
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("coordinator heartbeat status: %s", resp.Status)
+		return fmt.Errorf("coordinator worker status update status: %s", resp.Status)
 	}
 	return nil
 }

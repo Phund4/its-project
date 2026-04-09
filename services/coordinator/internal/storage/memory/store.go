@@ -8,10 +8,10 @@ import (
 )
 
 type Store struct {
-	mu          sync.RWMutex
-	sources     []domain.Source
-	zoneWorkers map[string][]domain.Replica
-	heartbeats  map[string]domain.WorkerHeartbeat
+	mu             sync.RWMutex
+	sources        []domain.Source
+	zoneWorkers    map[string][]domain.Replica
+	workerStatuses map[string]domain.WorkerStatusSnapshot
 }
 
 func New(sources []domain.Source, zoneWorkers map[string][]domain.Replica) *Store {
@@ -19,9 +19,9 @@ func New(sources []domain.Source, zoneWorkers map[string][]domain.Replica) *Stor
 		zoneWorkers = map[string][]domain.Replica{}
 	}
 	return &Store{
-		sources:     append([]domain.Source(nil), sources...),
-		zoneWorkers: zoneWorkers,
-		heartbeats:  map[string]domain.WorkerHeartbeat{},
+		sources:        append([]domain.Source(nil), sources...),
+		zoneWorkers:    zoneWorkers,
+		workerStatuses: map[string]domain.WorkerStatusSnapshot{},
 	}
 }
 
@@ -55,21 +55,20 @@ func (s *Store) ZoneWorkers(_ context.Context, zoneID string) (map[string][]doma
 	return out, nil
 }
 
-func (s *Store) UpsertHeartbeat(_ context.Context, hb domain.WorkerHeartbeat) error {
+func (s *Store) UpsertWorkerStatus(_ context.Context, status domain.WorkerStatusSnapshot) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	k := hb.ZoneID + "|" + hb.ClusterID + "|" + hb.InstanceID
-	s.heartbeats[k] = hb
+	k := status.ZoneID + "|" + status.ClusterID + "|" + status.InstanceID
+	s.workerStatuses[k] = status
 	return nil
 }
 
-func (s *Store) Heartbeats(_ context.Context) ([]domain.WorkerHeartbeat, error) {
+func (s *Store) ListWorkerStatuses(_ context.Context) ([]domain.WorkerStatusSnapshot, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]domain.WorkerHeartbeat, 0, len(s.heartbeats))
-	for _, hb := range s.heartbeats {
-		out = append(out, hb)
+	out := make([]domain.WorkerStatusSnapshot, 0, len(s.workerStatuses))
+	for _, status := range s.workerStatuses {
+		out = append(out, status)
 	}
 	return out, nil
 }
-

@@ -30,8 +30,8 @@ type Source struct {
 	Enabled   bool   `yaml:"enabled" json:"enabled"`
 }
 
-// WorkerHeartbeat статус живого ingestion-инстанса.
-type WorkerHeartbeat struct {
+// WorkerStatusSnapshot stores last reported worker state.
+type WorkerStatusSnapshot struct {
 	ZoneID      string    `json:"zone_id"`
 	ClusterID   string    `json:"cluster_id"`
 	InstanceID  string    `json:"instance_id"`

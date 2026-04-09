@@ -29,7 +29,7 @@ flowchart LR
   end
 
   VideoSim -->|RTSP| MTX
-  DI -->|HTTP heartbeat assignments| COORD
+  DI -->|HTTP worker status assignments| COORD
   COORD -->|HTTP assignments| DI
   COORD -->|state read/write| PG
   MTX -->|RTSP| DI
@@ -61,7 +61,7 @@ flowchart LR
 flowchart TB
   subgraph COORD[coordinator]
     SRC[sources.yaml + ingestion_instances.yaml]
-    API[GET assignments POST heartbeat]
+    API[GET assignments POST worker status]
     SRC --> API
   end
   PG[(PostgreSQL)]
@@ -79,8 +79,8 @@ flowchart TB
   MTX[MediaMTX RTSP]
   GEN[bus-telemetry-generator]
 
-  DI1 -->|POST heartbeat| API
-  DI2 -->|POST heartbeat| API
+  DI1 -->|POST worker status| API
+  DI2 -->|POST worker status| API
   API -->|state read/write| PG
   API -->|GET road_segment_video| DI1
   API -->|GET road_segment_video| DI2

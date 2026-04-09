@@ -11,23 +11,23 @@ import (
 type Store interface {
 	Sources(ctx context.Context, zoneID string) ([]domain.Source, error)
 	ZoneWorkers(ctx context.Context, zoneID string) (map[string][]domain.Replica, error)
-	UpsertHeartbeat(ctx context.Context, hb domain.WorkerHeartbeat) error
-	Heartbeats(ctx context.Context) ([]domain.WorkerHeartbeat, error)
+	UpsertWorkerStatus(ctx context.Context, status domain.WorkerStatusSnapshot) error
+	ListWorkerStatuses(ctx context.Context) ([]domain.WorkerStatusSnapshot, error)
 }
 
 // App работает поверх общего стора (PostgreSQL или in-memory).
 type App struct {
-	store            Store
-	heartbeatTimeout time.Duration
+	store               Store
+	workerStatusTimeout time.Duration
 }
 
-func New(store Store, heartbeatTimeout time.Duration) *App {
-	if heartbeatTimeout <= 0 {
-		heartbeatTimeout = 30 * time.Second
+func New(store Store, workerStatusTimeout time.Duration) *App {
+	if workerStatusTimeout <= 0 {
+		workerStatusTimeout = 30 * time.Second
 	}
 	return &App{
-		store:            store,
-		heartbeatTimeout: heartbeatTimeout,
+		store:               store,
+		workerStatusTimeout: workerStatusTimeout,
 	}
 }
 
@@ -49,13 +49,13 @@ func (a *App) Assignments(zoneID, clusterID, instanceID, dataClass string) []dom
 	if err != nil {
 		return nil
 	}
-	hbs, err := a.store.Heartbeats(ctx)
+	hbs, err := a.store.ListWorkerStatuses(ctx)
 	if err != nil {
 		return nil
 	}
-	heartbeats := make(map[string]domain.WorkerHeartbeat, len(hbs))
-	for _, hb := range hbs {
-		heartbeats[workerKey(hb.ZoneID, hb.ClusterID, hb.InstanceID)] = hb
+	workerStatuses := make(map[string]domain.WorkerStatusSnapshot, len(hbs))
+	for _, status := range hbs {
+		workerStatuses[workerKey(status.ZoneID, status.ClusterID, status.InstanceID)] = status
 	}
 	filtered := make([]domain.Source, 0, len(candidates))
 	for _, s := range candidates {
@@ -69,12 +69,12 @@ func (a *App) Assignments(zoneID, clusterID, instanceID, dataClass string) []dom
 		return candidates[i].SourceID < candidates[j].SourceID
 	})
 
-	sim := a.initialSim(zoneID, workersByZone, heartbeats)
+	sim := a.initialSim(zoneID, workersByZone, workerStatuses)
 	owners := make(map[string]domain.Replica, len(candidates))
 
 	for _, s := range candidates {
 		pool := workersByZone[s.ZoneID]
-		alive := a.aliveReplicas(s.ZoneID, pool, heartbeats)
+		alive := a.aliveReplicas(s.ZoneID, pool, workerStatuses)
 		if len(alive) == 0 {
 			continue
 		}
@@ -101,8 +101,8 @@ func (a *App) Assignments(zoneID, clusterID, instanceID, dataClass string) []dom
 	return out
 }
 
-// initialSim — стартовая «занятость» по heartbeat (assignments + load), только для живых нод в зоне.
-func (a *App) initialSim(zoneID string, workersByZone map[string][]domain.Replica, heartbeats map[string]domain.WorkerHeartbeat) map[string]float64 {
+// initialSim — стартовая «занятость» по worker status (assignments + load), только для живых нод в зоне.
+func (a *App) initialSim(zoneID string, workersByZone map[string][]domain.Replica, workerStatuses map[string]domain.WorkerStatusSnapshot) map[string]float64 {
 	sim := make(map[string]float64)
 	for zid, pool := range workersByZone {
 		if zoneID != "" && zid != zoneID {
@@ -113,20 +113,20 @@ func (a *App) initialSim(zoneID string, workersByZone map[string][]domain.Replic
 			if _, ok := sim[k]; ok {
 				continue
 			}
-			if !a.isAlive(zid, r.ClusterID, r.InstanceID, heartbeats) {
+			if !a.isAlive(zid, r.ClusterID, r.InstanceID, workerStatuses) {
 				continue
 			}
-			hb := heartbeats[k]
-			sim[k] = float64(hb.Assignments) + hb.Load
+			status := workerStatuses[k]
+			sim[k] = float64(status.Assignments) + status.Load
 		}
 	}
 	return sim
 }
 
-func (a *App) aliveReplicas(zoneID string, pool []domain.Replica, heartbeats map[string]domain.WorkerHeartbeat) []domain.Replica {
+func (a *App) aliveReplicas(zoneID string, pool []domain.Replica, workerStatuses map[string]domain.WorkerStatusSnapshot) []domain.Replica {
 	out := make([]domain.Replica, 0, len(pool))
 	for _, r := range pool {
-		if a.isAlive(zoneID, r.ClusterID, r.InstanceID, heartbeats) {
+		if a.isAlive(zoneID, r.ClusterID, r.InstanceID, workerStatuses) {
 			out = append(out, r)
 		}
 	}
@@ -160,13 +160,13 @@ func pickLeastLoaded(zoneID string, alive []domain.Replica, order []domain.Repli
 	return best
 }
 
-func (a *App) UpsertHeartbeat(hb domain.WorkerHeartbeat) {
-	hb.ObservedAt = time.Now().UTC()
-	_ = a.store.UpsertHeartbeat(context.Background(), hb)
+func (a *App) UpsertWorkerStatus(status domain.WorkerStatusSnapshot) {
+	status.ObservedAt = time.Now().UTC()
+	_ = a.store.UpsertWorkerStatus(context.Background(), status)
 }
 
-func (a *App) Heartbeats() []domain.WorkerHeartbeat {
-	out, err := a.store.Heartbeats(context.Background())
+func (a *App) ListWorkerStatuses() []domain.WorkerStatusSnapshot {
+	out, err := a.store.ListWorkerStatuses(context.Background())
 	if err != nil {
 		return nil
 	}
@@ -206,13 +206,13 @@ func workerKey(zoneID, clusterID, instanceID string) string {
 	return zoneID + "|" + clusterID + "|" + instanceID
 }
 
-func (a *App) isAlive(zoneID, clusterID, instanceID string, heartbeats map[string]domain.WorkerHeartbeat) bool {
+func (a *App) isAlive(zoneID, clusterID, instanceID string, workerStatuses map[string]domain.WorkerStatusSnapshot) bool {
 	if clusterID == "" || instanceID == "" {
 		return false
 	}
-	hb, ok := heartbeats[workerKey(zoneID, clusterID, instanceID)]
+	status, ok := workerStatuses[workerKey(zoneID, clusterID, instanceID)]
 	if !ok {
 		return false
 	}
-	return time.Since(hb.ObservedAt) <= a.heartbeatTimeout
+	return time.Since(status.ObservedAt) <= a.workerStatusTimeout
 }

@@ -5,15 +5,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
-	httpserver "traffic-coordinator/internal/adapters/http"
+	pgstore "traffic-coordinator/internal/adapters/postgres"
 	"traffic-coordinator/internal/app"
 	"traffic-coordinator/internal/config"
-	memstore "traffic-coordinator/internal/storage/memory"
-	pgstore "traffic-coordinator/internal/storage/postgres"
 )
 
 func main() {
@@ -21,17 +18,22 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	cfg, err := config.LoadFromEnv()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("config", "err", err)
 		os.Exit(1)
 	}
+
 	var store app.Store
-	if strings.TrimSpace(cfg.DatabaseURL) == "" {
-		store = memstore.New(cfg.Sources, cfg.ZoneWorkers)
-		slog.Info("coordinator store", "backend", "memory")
-	} else {
-		pgs, err := pgstore.New(ctx, cfg.DatabaseURL)
+	switch cfg.Coordinator.Store {
+	case "postgres":
+		pgs, err := pgstore.New(
+			ctx,
+			cfg.Postgres.URL,
+			cfg.Postgres.MaxOpenConns,
+			cfg.Postgres.MaxIdleConns,
+			cfg.Postgres.ConnMaxIdleTime,
+		)
 		if err != nil {
 			slog.Error("postgres connect", "err", err)
 			os.Exit(1)
@@ -39,9 +41,16 @@ func main() {
 		defer pgs.Close()
 		store = pgs
 		slog.Info("coordinator store", "backend", "postgres")
+	case "memory":
+		slog.Error("coordinator store", "err", "memory store is temporarily disabled")
+		os.Exit(1)
+	default:
+		slog.Error("coordinator store", "err", "unknown coordinator store")
+		os.Exit(1)
 	}
-	a := app.New(store, time.Duration(cfg.HeartbeatTimeoutSec)*time.Second)
-	if err := httpserver.Run(ctx, cfg.ListenAddr, a); err != nil {
+
+	a := app.New(store, time.Duration(cfg.Coordinator.WorkerStatusTimeoutSec)*time.Second)
+	if err := a.Run(ctx, cfg.Server); err != nil {
 		slog.Error("run", "err", err)
 		os.Exit(1)
 	}

@@ -31,10 +31,10 @@ func Run(rootCtx context.Context) error {
 	if zoneID == "" || clusterID == "" || instanceID == "" {
 		return fmt.Errorf("set COORDINATOR_ZONE_ID, COORDINATOR_CLUSTER_ID, COORDINATOR_INSTANCE_ID")
 	}
-	// Bootstrap-heartbeat: без него coordinator не считает инстанс "живым",
+	// Bootstrap worker status: без него coordinator не считает инстанс "живым",
 	// и при холодном старте может вернуть пустые назначения.
-	if err := deps.Coordinator.SendHeartbeat(rootCtx, zoneID, clusterID, instanceID, 0); err != nil {
-		slog.Warn("coordinator bootstrap heartbeat failed", "err", err)
+	if err := deps.Coordinator.SendWorkerStatus(rootCtx, zoneID, clusterID, instanceID, 0); err != nil {
+		slog.Warn("coordinator bootstrap worker status update failed", "err", err)
 	}
 
 	cameras, err := deps.Coordinator.FetchCameraAssignments(rootCtx, zoneID, clusterID, instanceID)
@@ -77,8 +77,8 @@ func Run(rootCtx context.Context) error {
 	if hasBusTelemetry {
 		assignmentCount++
 	}
-	if err := deps.Coordinator.SendHeartbeat(rootCtx, zoneID, clusterID, instanceID, assignmentCount); err != nil {
-		slog.Warn("coordinator heartbeat failed", "err", err)
+	if err := deps.Coordinator.SendWorkerStatus(rootCtx, zoneID, clusterID, instanceID, assignmentCount); err != nil {
+		slog.Warn("coordinator worker status update failed", "err", err)
 	}
 	go func() {
 		t := time.NewTicker(10 * time.Second)
@@ -88,8 +88,8 @@ func Run(rootCtx context.Context) error {
 			case <-rootCtx.Done():
 				return
 			case <-t.C:
-				if err := deps.Coordinator.SendHeartbeat(rootCtx, zoneID, clusterID, instanceID, assignmentCount); err != nil {
-					slog.Warn("coordinator heartbeat failed", "err", err)
+				if err := deps.Coordinator.SendWorkerStatus(rootCtx, zoneID, clusterID, instanceID, assignmentCount); err != nil {
+					slog.Warn("coordinator worker status update failed", "err", err)
 				}
 			}
 		}
