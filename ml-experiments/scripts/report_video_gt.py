@@ -35,13 +35,23 @@ def main() -> None:
     acc_n = list(acc.keys())
     cong_n = list(cong.keys())
 
-    bar(
-        acc_n,
-        [acc[k]["false_crash_rate"] for k in acc_n],
-        "Accident: false crash rate (GT = all normal)",
-        "rate",
-        args.out_dir / "video_gt_false_crash.png",
-    )
+    has_binary_metrics = "precision_crash" in next(iter(acc.values()))
+    if not has_binary_metrics:
+        bar(
+            acc_n,
+            [acc[k]["false_crash_rate"] for k in acc_n],
+            "Accident: false crash rate (GT = all normal)",
+            "rate",
+            args.out_dir / "video_gt_false_crash.png",
+        )
+    else:
+        bar(
+            acc_n,
+            [acc[k]["f1_crash"] for k in acc_n],
+            "Accident: F1 (crash class)",
+            "F1",
+            args.out_dir / "video_gt_f1_crash.png",
+        )
     bar(
         acc_n,
         [acc[k]["mean_crash_probability"] for k in acc_n],
@@ -75,23 +85,44 @@ def main() -> None:
         f"- accident: `{d['tracks']['accident']['winner']}`",
         f"- congestion: `{d['tracks']['congestion']['winner']}`",
         "",
-        "## Accident (GT = normal on every frame)",
+        "## Accident",
         "",
-        "При двух классах: **accuracy = 1 − false_crash_rate** (доля кадров, где предсказан класс normal).",
+        d.get("interpretation", ""),
         "",
-        "| model | accuracy | f1_normal | false_crash_rate | mean_P_crash | p95_P_crash | fps |",
-        "|---|---:|---:|---:|---:|---:|---:|",
     ]
-    for k in acc_n:
-        m = acc[k]
-        lines.append(
-            f"| {k} | {m['accuracy']:.4f} | {m['f1_normal']:.4f} | {m['false_crash_rate']:.4f} | "
-            f"{m['mean_crash_probability']:.4f} | {m['p95_crash_probability']:.4f} | {m['fps']:.2f} |"
+    if has_binary_metrics:
+        lines.extend(
+            [
+                "| model | accuracy | precision_crash | recall_crash | f1_crash | f1_normal | mean_P_crash | p95_P_crash | fps |",
+                "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+            ]
         )
+        for k in acc_n:
+            m = acc[k]
+            lines.append(
+                f"| {k} | {m['accuracy']:.4f} | {m['precision_crash']:.4f} | {m['recall_crash']:.4f} | "
+                f"{m['f1_crash']:.4f} | {m['f1_normal']:.4f} | {m['mean_crash_probability']:.4f} | "
+                f"{m['p95_crash_probability']:.4f} | {m['fps']:.2f} |"
+            )
+    else:
+        lines.extend(
+            [
+                "При двух классах: **accuracy = 1 − false_crash_rate** (доля кадров, где предсказан класс normal).",
+                "",
+                "| model | accuracy | f1_normal | false_crash_rate | mean_P_crash | p95_P_crash | fps |",
+                "|---|---:|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for k in acc_n:
+            m = acc[k]
+            lines.append(
+                f"| {k} | {m['accuracy']:.4f} | {m['f1_normal']:.4f} | {m['false_crash_rate']:.4f} | "
+                f"{m['mean_crash_probability']:.4f} | {m['p95_crash_probability']:.4f} | {m['fps']:.2f} |"
+            )
+        lines.extend(["", "_f1_crash_omit: on all-normal GT, F1 for the crash class is not meaningful."])
+
     lines.extend(
         [
-            "",
-            "_f1_crash_omit: on all-normal GT, F1 for the crash class is not meaningful.",
             "",
             "## Congestion (target 0)",
             "",
@@ -106,7 +137,7 @@ def main() -> None:
         [
             "",
             "## Charts",
-            "- `video_gt_false_crash.png`",
+            f"- `{'video_gt_f1_crash.png' if has_binary_metrics else 'video_gt_false_crash.png'}`",
             "- `video_gt_mean_crash_prob.png`",
             "- `video_gt_f1_normal.png`",
             "- `video_gt_accident_fps.png`",

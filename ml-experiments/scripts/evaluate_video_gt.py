@@ -11,7 +11,7 @@ from pathlib import Path
 
 import torch
 from PIL import Image
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from torch.utils.data import DataLoader, Dataset
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +40,34 @@ class AllNormalImageDataset(Dataset):
         p = self.paths[i]
         img = Image.open(p).convert("RGB")
         return self.tf(img), torch.tensor(self.normal_idx, dtype=torch.long)
+
+
+class BinaryFolderImageDataset(Dataset):
+    def __init__(self, split_root: Path, transform):
+        exts = {".png", ".jpg", ".jpeg", ".webp"}
+        crash_dirs = ("Accident", "accident", "Crash", "crash")
+        normal_dirs = ("Non Accident", "non_accident", "non-accident", "normal", "Normal")
+
+        self.items: list[tuple[Path, int]] = []
+        for d in crash_dirs:
+            p = split_root / d
+            if p.is_dir():
+                self.items.extend((f, 0) for f in sorted(p.iterdir()) if f.is_file() and f.suffix.lower() in exts)
+                break
+        for d in normal_dirs:
+            p = split_root / d
+            if p.is_dir():
+                self.items.extend((f, 1) for f in sorted(p.iterdir()) if f.is_file() and f.suffix.lower() in exts)
+                break
+        self.tf = transform
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __getitem__(self, i: int):
+        p, y = self.items[i]
+        img = Image.open(p).convert("RGB")
+        return self.tf(img), torch.tensor(y, dtype=torch.long)
 
 
 @torch.no_grad()
@@ -75,6 +103,38 @@ def eval_accident_video_gt(model: torch.nn.Module, loader: DataLoader, crash_idx
     return out
 
 
+@torch.no_grad()
+def eval_accident_binary(model: torch.nn.Module, loader: DataLoader, crash_idx: int, normal_idx: int) -> dict:
+    ys: list[int] = []
+    ps: list[int] = []
+    crash_probs: list[float] = []
+    lats: list[float] = []
+    for x, y in loader:
+        t0 = time.perf_counter()
+        logits = model(x)
+        lats.append((time.perf_counter() - t0) * 1000.0)
+        prob_crash = torch.softmax(logits, dim=1)[:, crash_idx].cpu().numpy().tolist()
+        pred = logits.argmax(1).cpu().numpy().tolist()
+        ys.extend(y.numpy().tolist())
+        ps.extend(pred)
+        crash_probs.extend(prob_crash)
+    n = len(ys)
+    crash_probs_sorted = sorted(crash_probs)
+    p95_prob = crash_probs_sorted[int(0.95 * (n - 1))] if n > 1 else (crash_probs_sorted[0] if crash_probs_sorted else 0.0)
+    out = {
+        "accuracy": float(accuracy_score(ys, ps)),
+        "precision_crash": float(precision_score(ys, ps, pos_label=crash_idx, zero_division=0)),
+        "recall_crash": float(recall_score(ys, ps, pos_label=crash_idx, zero_division=0)),
+        "f1_crash": float(f1_score(ys, ps, pos_label=crash_idx, zero_division=0)),
+        "f1_normal": float(f1_score(ys, ps, pos_label=normal_idx, zero_division=0)),
+        "mean_crash_probability": float(sum(crash_probs) / n if n else 0.0),
+        "p95_crash_probability": float(p95_prob),
+        "samples": n,
+    }
+    out.update(summarize_latency(lats))
+    return out
+
+
 def evaluate_accident_video_gt(data_dir: Path, artifacts_dir: Path, batch_size: int) -> dict:
     out: dict[str, dict] = {}
     for model_name in ("baseline_cnn", "resnet18"):
@@ -98,6 +158,35 @@ def evaluate_accident_video_gt(data_dir: Path, artifacts_dir: Path, batch_size: 
     return out
 
 
+def evaluate_accident_cctv(cctv_root: Path, artifacts_dir: Path, batch_size: int) -> dict:
+    split_root = cctv_root / "test"
+    if not split_root.is_dir():
+        raise SystemExit(f"missing CCTV test split: {split_root}")
+
+    out: dict[str, dict] = {}
+    for model_name in ("baseline_cnn", "resnet18"):
+        ckpt_path = artifacts_dir / artifact_subdir(model_name) / "best.pt"
+        if not ckpt_path.is_file():
+            raise SystemExit(f"missing checkpoint: {ckpt_path}")
+        model, img_size, meta = load_checkpoint(ckpt_path, "accident")
+        tf = make_transform(img_size)
+        c2i = meta.get("class_to_idx") or {}
+        if "crash" not in c2i or "normal" not in c2i:
+            raise SystemExit(f"checkpoint missing class_to_idx: {ckpt_path}")
+        crash_idx = int(c2i["crash"])
+        normal_idx = int(c2i["normal"])
+        test_ds = BinaryFolderImageDataset(split_root, tf)
+        if len(test_ds) == 0:
+            raise SystemExit(f"no images found under CCTV split: {split_root}")
+        loader = DataLoader(test_ds, batch_size=batch_size)
+        metrics = eval_accident_binary(model, loader, crash_idx, normal_idx)
+        metrics["checkpoint"] = str(ckpt_path)
+        metrics["crash_class_index"] = crash_idx
+        metrics["normal_class_index"] = normal_idx
+        out[model_name] = metrics
+    return out
+
+
 def pick_accident_winner_video_gt(results: dict[str, dict]) -> str:
     return min(
         results.keys(),
@@ -106,6 +195,19 @@ def pick_accident_winner_video_gt(results: dict[str, dict]) -> str:
             -results[k]["accuracy"],
             -results[k]["f1_normal"],
             -results[k]["fps"],
+        ),
+    )
+
+
+def pick_accident_winner_binary(results: dict[str, dict]) -> str:
+    return max(
+        results.keys(),
+        key=lambda k: (
+            0.5 * (results[k]["f1_crash"] + results[k]["f1_normal"]),
+            results[k]["recall_crash"],
+            results[k]["precision_crash"],
+            results[k]["accuracy"],
+            results[k]["fps"],
         ),
     )
 
@@ -122,6 +224,7 @@ def main() -> None:
 
     p = argparse.ArgumentParser()
     p.add_argument("--accident-data", type=Path, default=ROOT / "data" / "accident" / "video-gt" / "images")
+    p.add_argument("--accident-cctv-root", type=Path, default=ROOT / "data" / "CCTV_accidents")
     p.add_argument("--congestion-data", type=Path, default=ROOT / "data" / "congestion" / "video-gt")
     p.add_argument("--accident-artifacts", type=Path, default=default_artifacts / "accident")
     p.add_argument("--congestion-artifacts", type=Path, default=default_artifacts / "congestion")
@@ -137,26 +240,40 @@ def main() -> None:
     if not args.congestion_artifacts.exists() and (legacy_artifacts / "congestion").exists():
         args.congestion_artifacts = legacy_artifacts / "congestion"
 
-    if not (args.accident_data / "test" / "normal").is_dir():
+    use_cctv = args.accident_cctv_root.is_dir() and (args.accident_cctv_root / "test").is_dir()
+    if not use_cctv and not (args.accident_data / "test" / "normal").is_dir():
         raise SystemExit(f"run prepare_video_ground_truth.py first; missing {args.accident_data / 'test' / 'normal'}")
     if not (args.congestion_data / "labels" / "test.csv").is_file():
         raise SystemExit(f"missing {args.congestion_data / 'labels' / 'test.csv'}")
 
-    accident = evaluate_accident_video_gt(args.accident_data, args.accident_artifacts, args.batch_size)
-    congestion = evaluate_congestion_models(args.congestion_data, args.congestion_artifacts, args.batch_size)
-    acc_winner = pick_accident_winner_video_gt(accident)
-    cong_winner = pick_congestion_winner_video_gt(congestion)
-
-    payload = {
-        "mode": "video_ground_truth_eval",
-        "interpretation": (
+    if use_cctv:
+        accident = evaluate_accident_cctv(args.accident_cctv_root, args.accident_artifacts, args.batch_size)
+        acc_winner = pick_accident_winner_binary(accident)
+        accident_assumption = "CCTV test split with both classes: Accident and Non Accident"
+        mode = "cctv_accident_eval"
+        interpretation = (
+            "Метрики accident считаются на mixed test (есть и аварии, и неаварии). "
+            "Основная метрика выбора — F1 по классу crash с учётом recall/precision и latency."
+        )
+    else:
+        accident = evaluate_accident_video_gt(args.accident_data, args.accident_artifacts, args.batch_size)
+        acc_winner = pick_accident_winner_video_gt(accident)
+        accident_assumption = "all frames labeled normal (no crash in source videos)"
+        mode = "video_ground_truth_eval"
+        interpretation = (
             "При разметке «на видео везде normal» accuracy — это доля кадров, где argmax == индекс класса normal из чекпойнта. "
             "Для двух классов это же число, что 1 − false_crash_rate (доля предсказаний «crash»). "
             "Если модель на каждом кадре выбирает «crash» и softmax это подтверждает (высокая mean_P_crash), accuracy=0 — "
             "ожидаемый и корректный результат; это не перевёрнутая метрика."
-        ),
+        )
+    congestion = evaluate_congestion_models(args.congestion_data, args.congestion_artifacts, args.batch_size)
+    cong_winner = pick_congestion_winner_video_gt(congestion)
+
+    payload = {
+        "mode": mode,
+        "interpretation": interpretation,
         "assumptions": {
-            "accident": "all frames labeled normal (no crash in source videos)",
+            "accident": accident_assumption,
             "congestion": "target is 0.0 for every frame (closer model output to 0 is better)",
         },
         "tracks": {

@@ -1,0 +1,10 @@
+{
+  "accident": {
+    "winner": "resnet18",
+    "checkpoint": "ml-experiments/artifacts/accident/resnet18/best.pt"
+  },
+  "congestion": {
+    "winner": "tiny_cnn",
+    "checkpoint": "ml-experiments/artifacts/congestion/tiny-cnn/best.pt"
+  }
+}

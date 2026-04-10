@@ -1,47 +1,49 @@
 {
-  "mode": "video_ground_truth_eval",
-  "interpretation": "При разметке «на видео везде normal» accuracy — это доля кадров, где argmax == индекс класса normal из чекпойнта. Для двух классов это же число, что 1 − false_crash_rate (доля предсказаний «crash»). Если модель на каждом кадре выбирает «crash» и softmax это подтверждает (высокая mean_P_crash), accuracy=0 — ожидаемый и корректный результат; это не перевёрнутая метрика.",
+  "mode": "cctv_accident_eval",
+  "interpretation": "Метрики accident считаются на mixed test (есть и аварии, и неаварии). Основная метрика выбора — F1 по классу crash с учётом recall/precision и latency.",
   "assumptions": {
-    "accident": "all frames labeled normal (no crash in source videos)",
+    "accident": "CCTV test split with both classes: Accident and Non Accident",
     "congestion": "target is 0.0 for every frame (closer model output to 0 is better)"
   },
   "tracks": {
     "accident": {
       "models": {
         "baseline_cnn": {
-          "accuracy": 0.0,
-          "f1_crash": 0.0,
+          "accuracy": 0.47,
+          "precision_crash": 0.47,
+          "recall_crash": 1.0,
+          "f1_crash": 0.6394557823129252,
           "f1_normal": 0.0,
-          "false_crash_rate": 1.0,
-          "mean_crash_probability": 0.9239546278779975,
-          "p95_crash_probability": 0.9988760352134705,
-          "samples": 478,
-          "mean_ms": 17.30142649988314,
-          "p50_ms": 16.822875000798376,
-          "p95_ms": 23.06450000105542,
-          "fps": 57.7987023212655,
-          "checkpoint": "ml-experiments/artifacts/accident/baseline-cnn/best.pt",
+          "mean_crash_probability": 0.5272141683101654,
+          "p95_crash_probability": 0.5294128060340881,
+          "samples": 100,
+          "mean_ms": 15.759702428892654,
+          "p50_ms": 17.868208000436425,
+          "p95_ms": 18.330749997403473,
+          "fps": 63.45297473172305,
+          "checkpoint": "/Users/popov.aleksandr10/study/labs/piis/ml-experiments/artifacts/accident/baseline-cnn/best.pt",
           "crash_class_index": 0,
           "normal_class_index": 1
         },
         "resnet18": {
-          "accuracy": 0.0,
-          "f1_crash": 0.0,
-          "f1_normal": 0.0,
-          "false_crash_rate": 1.0,
-          "mean_crash_probability": 0.9962968498343703,
-          "p95_crash_probability": 1.0,
-          "samples": 478,
-          "mean_ms": 108.23707359983625,
-          "p50_ms": 109.6747499977937,
-          "p95_ms": 120.20070799917448,
-          "fps": 9.238978537955528,
-          "checkpoint": "ml-experiments/artifacts/accident/resnet18/best.pt",
+          "accuracy": 0.67,
+          "precision_crash": 0.675,
+          "recall_crash": 0.574468085106383,
+          "f1_crash": 0.6206896551724138,
+          "f1_normal": 0.7079646017699115,
+          "mean_crash_probability": 0.48708196431398393,
+          "p95_crash_probability": 0.7071404457092285,
+          "samples": 100,
+          "mean_ms": 97.70382128148673,
+          "p50_ms": 108.80424999049865,
+          "p95_ms": 110.59479099640157,
+          "fps": 10.235014218317822,
+          "checkpoint": "/Users/popov.aleksandr10/study/labs/piis/ml-experiments/artifacts/accident/resnet18/best.pt",
           "crash_class_index": 0,
           "normal_class_index": 1
         }
       },
-      "winner": "baseline_cnn"
+      "winner": "resnet18"
     },
     "congestion": {
       "models": {
@@ -49,21 +51,21 @@
           "mae": 0.18004630588649706,
           "rmse": 0.1834351556670148,
           "samples": 478,
-          "mean_ms": 17.81861240027259,
-          "p50_ms": 17.894000000524102,
-          "p95_ms": 18.556458002422005,
-          "fps": 56.12109279534595,
-          "checkpoint": "ml-experiments/artifacts/congestion/tiny-cnn/best.pt"
+          "mean_ms": 18.555722265834145,
+          "p50_ms": 17.56333399680443,
+          "p95_ms": 30.787124997004867,
+          "fps": 53.89173138473068,
+          "checkpoint": "/Users/popov.aleksandr10/study/labs/piis/ml-experiments/artifacts/congestion/tiny-cnn/best.pt"
         },
         "linear_resnet": {
           "mae": 0.19757653330160485,
           "rmse": 0.19945498353087945,
           "samples": 478,
-          "mean_ms": 114.16392779986684,
-          "p50_ms": 109.5406250024098,
-          "p95_ms": 130.30829199851723,
-          "fps": 8.759334224668875,
-          "checkpoint": "ml-experiments/artifacts/congestion/linear-resnet/best.pt"
+          "mean_ms": 113.27289303493065,
+          "p50_ms": 107.7514579956187,
+          "p95_ms": 127.72875002701767,
+          "fps": 8.828237482127555,
+          "checkpoint": "/Users/popov.aleksandr10/study/labs/piis/ml-experiments/artifacts/congestion/linear-resnet/best.pt"
         }
       },
       "winner": "tiny_cnn"
