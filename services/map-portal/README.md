@@ -26,17 +26,17 @@ go run ./cmd/map-portal
 | `LISTEN_ADDR` | `:8096` | HTTP карты |
 | `ANALYTICS_GRPC_ADDR` | `127.0.0.1:8097` | Адрес gRPC **analytics** (map.v1.MapPortal) |
 
-## HTTP (страница и JSON для фронта)
+## HTTP: страница и JSON для фронтенда
 
 - `GET /` — карта.
 - `GET /health` — `ok`.
 - `GET /api/v1/municipalities` | `/api/v1/stops?municipality_id=` | `/api/v1/buses?municipality_id=` — прокси к analytics по gRPC.
 
-## OpenStreetMap
+## Карта OpenStreetMap
 
-Тайлы `tile.openstreetmap.org` — для dev нормально; в проде см. [политику OSM](https://operations.osmfoundation.org/policies/tiles/).
+Тайлы с `tile.openstreetmap.org` для разработки обычно допустимы; для продуктива см. [политику использования тайлов OSM](https://operations.osmfoundation.org/policies/tiles/).
 
-## Регенерация proto (analytics)
+## Регенерация protobuf (analytics)
 
 После правок [`services/analytics/api/map/v1/map_api.proto`](../analytics/api/map/v1/map_api.proto):
 

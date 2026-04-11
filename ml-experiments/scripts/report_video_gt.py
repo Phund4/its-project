@@ -30,7 +30,13 @@ def main() -> None:
     d = json.loads(args.input.read_text(encoding="utf-8"))
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    acc = d["tracks"]["accident"]["models"]
+    acc_track = d["tracks"]["accident"]
+    if isinstance(acc_track.get("test"), dict) and "models" in acc_track["test"]:
+        acc = acc_track["test"]["models"]
+        acc_val = acc_track.get("validation", {}).get("models") if isinstance(acc_track.get("validation"), dict) else None
+    else:
+        acc = acc_track["models"]
+        acc_val = None
     cong = d["tracks"]["congestion"]["models"]
     acc_n = list(acc.keys())
     cong_n = list(cong.keys())
@@ -78,14 +84,14 @@ def main() -> None:
         d.get("interpretation", ""),
         "",
         "Assumptions:",
-        f"- {d['assumptions']['accident']}",
-        f"- {d['assumptions']['congestion']}",
+        f"- accident: {d['assumptions']['accident']}",
+        f"- congestion: {d['assumptions']['congestion']}",
         "",
         "## Winners",
         f"- accident: `{d['tracks']['accident']['winner']}`",
         f"- congestion: `{d['tracks']['congestion']['winner']}`",
         "",
-        "## Accident",
+        "## Accident (test split)",
         "",
         d.get("interpretation", ""),
         "",
@@ -121,10 +127,27 @@ def main() -> None:
             )
         lines.extend(["", "_f1_crash_omit: on all-normal GT, F1 for the crash class is not meaningful."])
 
+    if acc_val:
+        lines.extend(
+            [
+                "",
+                "## Accident (validation / CCTV-accidents/val)",
+                "",
+                "| model | accuracy | precision_crash | recall_crash | f1_crash | f1_normal | fps |",
+                "|---|---:|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for k in acc_n:
+            m = acc_val[k]
+            lines.append(
+                f"| {k} | {m['accuracy']:.4f} | {m['precision_crash']:.4f} | {m['recall_crash']:.4f} | "
+                f"{m['f1_crash']:.4f} | {m['f1_normal']:.4f} | {m['fps']:.2f} |"
+            )
+
     lines.extend(
         [
             "",
-            "## Congestion (target 0)",
+            "## Congestion (test)",
             "",
             "| model | mae | rmse | fps |",
             "|---|---:|---:|---:|",

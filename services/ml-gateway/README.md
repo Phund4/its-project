@@ -1,13 +1,13 @@
-# ml_gateway
+# Шлюз ml-gateway
 
-Тонкий HTTP-слой между **ml-experiments** и **analytics**: принимает `POST /v1/road-events`, валидирует JSON и **синхронно пересылает** то же тело в **`analytics`** (`ANALYTICS_BASE_URL` + `ANALYTICS_INGEST_PATH`). Локального хранения и **нет** `GET /v1/road-events`.
+Тонкий HTTP-слой между **`ml-serving`** (или другим клиентом) и **`analytics`**: принимает `POST /v1/road-events`, проверяет JSON и **синхронно пересылает** то же тело в **`analytics`** (`ANALYTICS_BASE_URL` + `ANALYTICS_INGEST_PATH`). Локального хранения нет, эндпоинта **`GET /v1/road-events`** нет.
 
-Сервис **не** входит в `infra/docker-compose.yml` — запуск вручную.
+При необходимости сервис можно не включать в `infra/docker-compose.yml` — запуск вручную.
 
 ## API
 
-- `POST /v1/road-events` — тело JSON: `segment_id`, `camera_id`, `observed_at`, `s3_key`, `ml`. При успешной пересылке в analytics ответ **`204`**. Если **`ANALYTICS_BASE_URL`** не задан — **`503`**. Ошибка analytics — **`502`**.
-- `GET /metrics` — Prometheus.
+- `POST /v1/road-events` — тело JSON: `segment_id`, `camera_id`, `observed_at`, `s3_key`, `ml`. Успех — **`204`**. Если не заданы ни **`KAFKA_BOOTSTRAP_SERVERS`**, ни **`ANALYTICS_BASE_URL`** — **`503`**. Сбой пересылки (Kafka или HTTP) — **`502`**.
+- `GET /metrics` — метрики Prometheus.
 - `GET /health` — `200 ok`.
 
 ## Переменные окружения
@@ -17,9 +17,11 @@
 | Переменная | Назначение |
 |------------|------------|
 | `LISTEN_ADDR` | по умолчанию `:8092` |
-| `ANALYTICS_BASE_URL` | базой URL analytics, например `http://127.0.0.1:8093` |
+| `ANALYTICS_BASE_URL` | базовый URL analytics, например `http://127.0.0.1:8093` |
+| `KAFKA_BOOTSTRAP_SERVERS` | если задано — события пишутся в Kafka (топик из `KAFKA_TOPIC_VIDEO`) вместо HTTP |
+| `KAFKA_TOPIC_VIDEO` | топик для видео-событий |
 | `ANALYTICS_INGEST_PATH` | по умолчанию `/v1/ingest` |
-| `ANALYTICS_TIMEOUT` | секунды HTTP-клиента, по умолчанию `10` |
+| `ANALYTICS_TIMEOUT` | таймаут HTTP-клиента в секундах, по умолчанию `10` |
 
 ## Запуск
 
@@ -28,8 +30,8 @@ cd services/ml-gateway
 go run ./cmd/gateway
 ```
 
-Порядок: **ClickHouse** → **analytics** → **ml-gateway** → **ml-experiments** → **data-ingestion** (только для видео-потока).
+Типичный порядок для видео: **ClickHouse** → **analytics** → **ml-gateway** ← **ml-serving** ← **data-ingestion**.
 
-В **`ml-experiments/.env`** по-прежнему **`ML_GATEWAY_URL`** на этот сервис.
+В **`services/ml-serving/.env`** задаётся **`ML_GATEWAY_URL`** на этот сервис (если нужна отправка событий в шлюз после инференса).
 
-Метрика ошибок: **`ml_gateway_operation_errors_total{stage}`** — `post_decode` | `post_validate` | `forward_analytics` | `analytics_response`.
+Метрика ошибок: **`ml_gateway_operation_errors_total{stage}`** — `post_decode` | `post_validate` | `forward_analytics` | `analytics_response` | `kafka_write` и др.

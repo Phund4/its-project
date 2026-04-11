@@ -169,7 +169,7 @@ def eval_congestion(model: nn.Module, loader: DataLoader) -> dict:
     return out
 
 
-def evaluate_congestion_models(data_dir: Path, artifacts_dir: Path, batch_size: int) -> dict:
+def evaluate_congestion_models(data_dir: Path, artifacts_dir: Path, batch_size: int, split: str = "test") -> dict:
     out: dict[str, dict] = {}
     for model_name in ("tiny_cnn", "linear_resnet"):
         ckpt_path = artifacts_dir / artifact_subdir(model_name) / "best.pt"
@@ -177,7 +177,7 @@ def evaluate_congestion_models(data_dir: Path, artifacts_dir: Path, batch_size: 
             raise SystemExit(f"missing checkpoint: {ckpt_path}")
         model, img_size, _ = load_checkpoint(ckpt_path, "congestion")
         tf = make_transform(img_size)
-        test_ds = CongestionCSV(data_dir, "test", tf)
+        test_ds = CongestionCSV(data_dir, split, tf)
         loader = DataLoader(test_ds, batch_size=batch_size)
         metrics = eval_congestion(model, loader)
         metrics["checkpoint"] = str(ckpt_path)

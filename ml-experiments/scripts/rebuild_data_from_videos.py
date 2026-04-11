@@ -58,6 +58,7 @@ def main() -> None:
     (args.data_dir / "README.txt").write_text(
         "Data rebuilt from local videos only.\n"
         "No ground-truth labels were created automatically.\n"
+        "No data/train directory is created or used.\n"
         "Frames are in data/videos/frames/<clip>/*.png\n"
         + "\n".join(summary)
         + f"\nTotal frames: {total}\n",

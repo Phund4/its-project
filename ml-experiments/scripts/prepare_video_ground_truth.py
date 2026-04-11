@@ -101,9 +101,11 @@ def main() -> None:
 
     readme = args.congestion_root.parent / "video-gt_README.txt"
     readme.write_text(
-        "Ground truth for your driving videos (no real incidents in footage):\n"
-        "- accident: all samples in test/normal/ (class normal).\n"
-        f"- congestion: all targets = {args.congestion_target} in congestion/video-gt/labels/test.csv\n"
+        "Ground truth for your driving videos (no real incidents in footage).\n"
+        "Каталог data/train не создаётся и не используется.\n"
+        "- accident (legacy video-gt): только test/normal/ (класс normal).\n"
+        "  Для валидации/теста по классам используйте data/CCTV-accidents/val и data/accident/test отдельно.\n"
+        f"- congestion: все targets = {args.congestion_target} в labels/test.csv (тестовый split).\n"
         f"- frames linked: {len(frames)}\n",
         encoding="utf-8",
     )

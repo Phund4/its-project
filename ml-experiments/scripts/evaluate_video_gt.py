@@ -158,10 +158,10 @@ def evaluate_accident_video_gt(data_dir: Path, artifacts_dir: Path, batch_size: 
     return out
 
 
-def evaluate_accident_cctv(cctv_root: Path, artifacts_dir: Path, batch_size: int) -> dict:
-    split_root = cctv_root / "test"
+def evaluate_accident_binary_split(split_root: Path, artifacts_dir: Path, batch_size: int) -> dict:
+    """Оценка accident-моделей на папке с подкаталогами Accident / Non Accident (или алиасы)."""
     if not split_root.is_dir():
-        raise SystemExit(f"missing CCTV test split: {split_root}")
+        raise SystemExit(f"missing accident image split directory: {split_root}")
 
     out: dict[str, dict] = {}
     for model_name in ("baseline_cnn", "resnet18"):
@@ -175,10 +175,10 @@ def evaluate_accident_cctv(cctv_root: Path, artifacts_dir: Path, batch_size: int
             raise SystemExit(f"checkpoint missing class_to_idx: {ckpt_path}")
         crash_idx = int(c2i["crash"])
         normal_idx = int(c2i["normal"])
-        test_ds = BinaryFolderImageDataset(split_root, tf)
-        if len(test_ds) == 0:
-            raise SystemExit(f"no images found under CCTV split: {split_root}")
-        loader = DataLoader(test_ds, batch_size=batch_size)
+        ds = BinaryFolderImageDataset(split_root, tf)
+        if len(ds) == 0:
+            raise SystemExit(f"no images found under split: {split_root}")
+        loader = DataLoader(ds, batch_size=batch_size)
         metrics = eval_accident_binary(model, loader, crash_idx, normal_idx)
         metrics["checkpoint"] = str(ckpt_path)
         metrics["crash_class_index"] = crash_idx
@@ -223,8 +223,24 @@ def main() -> None:
     default_out_root = repo_root / ".data" / "ml-experiments"
 
     p = argparse.ArgumentParser()
-    p.add_argument("--accident-data", type=Path, default=ROOT / "data" / "accident" / "video-gt" / "images")
-    p.add_argument("--accident-cctv-root", type=Path, default=ROOT / "data" / "CCTV_accidents")
+    p.add_argument(
+        "--accident-data",
+        type=Path,
+        default=ROOT / "data" / "accident" / "video-gt" / "images",
+        help="Корень для режима «все кадры normal» (legacy); тест по умолчанию — --accident-test-root.",
+    )
+    p.add_argument(
+        "--cctv-accidents-root",
+        type=Path,
+        default=ROOT / "data" / "CCTV-accidents",
+        help="Валидация accident: подкаталог val/ с классами Accident и Non Accident.",
+    )
+    p.add_argument(
+        "--accident-test-root",
+        type=Path,
+        default=ROOT / "data" / "accident" / "test",
+        help="Тест accident: папки Accident / Non Accident (или алиасы из BinaryFolderImageDataset).",
+    )
     p.add_argument("--congestion-data", type=Path, default=ROOT / "data" / "congestion" / "video-gt")
     p.add_argument("--accident-artifacts", type=Path, default=default_artifacts / "accident")
     p.add_argument("--congestion-artifacts", type=Path, default=default_artifacts / "congestion")
@@ -240,44 +256,76 @@ def main() -> None:
     if not args.congestion_artifacts.exists() and (legacy_artifacts / "congestion").exists():
         args.congestion_artifacts = legacy_artifacts / "congestion"
 
-    use_cctv = args.accident_cctv_root.is_dir() and (args.accident_cctv_root / "test").is_dir()
-    if not use_cctv and not (args.accident_data / "test" / "normal").is_dir():
-        raise SystemExit(f"run prepare_video_ground_truth.py first; missing {args.accident_data / 'test' / 'normal'}")
+    val_dir = args.cctv_accidents_root / "val"
+    has_cctv_val = val_dir.is_dir()
+    has_accident_test = args.accident_test_root.is_dir()
+    has_video_gt_normal = (args.accident_data / "test" / "normal").is_dir()
     if not (args.congestion_data / "labels" / "test.csv").is_file():
-        raise SystemExit(f"missing {args.congestion_data / 'labels' / 'test.csv'}")
+        raise SystemExit(f"missing congestion test split: {args.congestion_data / 'labels' / 'test.csv'}")
 
-    if use_cctv:
-        accident = evaluate_accident_cctv(args.accident_cctv_root, args.accident_artifacts, args.batch_size)
-        acc_winner = pick_accident_winner_binary(accident)
-        accident_assumption = "CCTV test split with both classes: Accident and Non Accident"
-        mode = "cctv_accident_eval"
-        interpretation = (
-            "Метрики accident считаются на mixed test (есть и аварии, и неаварии). "
-            "Основная метрика выбора — F1 по классу crash с учётом recall/precision и latency."
+    if has_cctv_val ^ has_accident_test:
+        raise SystemExit(
+            "Задайте оба split для accident или ни одного (тогда — legacy video-gt):\n"
+            f"  - валидация: {val_dir}\n"
+            f"  - тест: {args.accident_test_root}"
         )
-    else:
-        accident = evaluate_accident_video_gt(args.accident_data, args.accident_artifacts, args.batch_size)
-        acc_winner = pick_accident_winner_video_gt(accident)
-        accident_assumption = "all frames labeled normal (no crash in source videos)"
+
+    if has_cctv_val and has_accident_test:
+        accident_val = evaluate_accident_binary_split(val_dir, args.accident_artifacts, args.batch_size)
+        accident_test = evaluate_accident_binary_split(
+            args.accident_test_root, args.accident_artifacts, args.batch_size
+        )
+        acc_winner = pick_accident_winner_binary(accident_val)
+        accident_assumption_val = "validation: ml-experiments/data/CCTV-accidents/val (Accident + Non Accident)"
+        accident_assumption_test = "test: ml-experiments/data/accident/test (Accident + Non Accident)"
+        accident_assumption_combined = f"{accident_assumption_val}; {accident_assumption_test}"
+        mode = "cctv_val_accident_test"
+        interpretation = (
+            "Победитель accident выбирается по валидации на CCTV-accidents/val. "
+            "Итоговые метрики accident — на тесте data/accident/test. "
+            "Congestion — только тест (labels/test.csv). Набор data/train не используется."
+        )
+        accident_track = {
+            "validation": {"models": accident_val, "split_path": str(val_dir)},
+            "test": {"models": accident_test, "split_path": str(args.accident_test_root)},
+            "winner": acc_winner,
+        }
+        accident_for_winners_json = accident_val
+    elif has_video_gt_normal:
+        accident_legacy = evaluate_accident_video_gt(args.accident_data, args.accident_artifacts, args.batch_size)
+        acc_winner = pick_accident_winner_video_gt(accident_legacy)
+        accident_assumption_combined = "all frames labeled normal (no crash in source videos)"
         mode = "video_ground_truth_eval"
         interpretation = (
-            "При разметке «на видео везде normal» accuracy — это доля кадров, где argmax == индекс класса normal из чекпойнта. "
-            "Для двух классов это же число, что 1 − false_crash_rate (доля предсказаний «crash»). "
-            "Если модель на каждом кадре выбирает «crash» и softmax это подтверждает (высокая mean_P_crash), accuracy=0 — "
-            "ожидаемый и корректный результат; это не перевёрнутая метрика."
+            "Режим без CCTV-accidents/val и без data/accident/test: только video-gt (все normal). "
+            "Для протокола с валидацией и тестом подготовьте data/CCTV-accidents/val и data/accident/test."
         )
-    congestion = evaluate_congestion_models(args.congestion_data, args.congestion_artifacts, args.batch_size)
+        accident_track = {"models": accident_legacy, "winner": acc_winner}
+        accident_for_winners_json = accident_legacy
+    else:
+        raise SystemExit(
+            "Нужно одно из:\n"
+            f"  (1) валидация + тест accident: {val_dir} и {args.accident_test_root}\n"
+            f"  (2) legacy video-gt: {args.accident_data / 'test' / 'normal'}\n"
+            "Также нужен congestion test: .../labels/test.csv"
+        )
+
+    congestion = evaluate_congestion_models(
+        args.congestion_data, args.congestion_artifacts, args.batch_size, split="test"
+    )
     cong_winner = pick_congestion_winner_video_gt(congestion)
+
+    assumptions = {
+        "accident": accident_assumption_combined,
+        "congestion": "test: labels/test.csv (пути в CSV относительно --congestion-data); data/train не используется",
+    }
 
     payload = {
         "mode": mode,
         "interpretation": interpretation,
-        "assumptions": {
-            "accident": accident_assumption,
-            "congestion": "target is 0.0 for every frame (closer model output to 0 is better)",
-        },
+        "assumptions": assumptions,
         "tracks": {
-            "accident": {"models": accident, "winner": acc_winner},
+            "accident": accident_track,
             "congestion": {"models": congestion, "winner": cong_winner},
         },
     }
@@ -296,7 +344,7 @@ def main() -> None:
     winners_payload = {
         "accident": {
             "winner": acc_winner,
-            "checkpoint": rel_ckpt(accident[acc_winner]["checkpoint"]),
+            "checkpoint": rel_ckpt(accident_for_winners_json[acc_winner]["checkpoint"]),
         },
         "congestion": {
             "winner": cong_winner,

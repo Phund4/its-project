@@ -9,7 +9,7 @@
 Оба входа маппят данные в JSON с полем **`telemetry`** (не `ml`) и пересылают в analytics/Kafka.  
 Каталог в **coordinator** задаёт **`data_class`**: для `vehicle_bus_telemetry` фильтра по списку городов нет — районы и идентификаторы в полезной нагрузке.
 
-Генератор [`data-generators/bus-telemetry`](../../data-generators/bus-telemetry): переменная **`BUS_TELEMETRY_MUNICIPALITY_ID`** (по умолчанию `msk`) и координаты вокруг центра выбранного города.
+Генератор [`data-generators/telemetry-data`](../../data-generators/telemetry-data): переменные **`BUS_TELEMETRY_MUNICIPALITY_ID`**, **`BUS_TELEMETRY_ALL_CITIES`** и координаты вдоль маршрутов из сида ClickHouse (см. код генератора).
 
 **Камеры:** сегменты, `camera_id` и **`rtsp_url`** задаются назначениями в **coordinator** (`data_class=road_segment_video`). Если процесс **ingestion** крутится в той же Docker-сети, что и MediaMTX, в `rtsp_url` укажите хост **`mediamtx`** вместо `localhost` (например `rtsp://mediamtx:8554/cam-01`).
 

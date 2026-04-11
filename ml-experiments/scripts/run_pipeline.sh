@@ -25,7 +25,12 @@ WINNERS_JSON="${OUT_ROOT}/winners.json"
 
 "$PY" scripts/rebuild_data_from_videos.py --videos-dir "${VID}" --data-dir "${DATA_DIR}" --fps 3
 "$PY" scripts/prepare_video_ground_truth.py --data-dir "${DATA_DIR}"
+# Валидация accident: DATA_DIR/CCTV-accidents/val/{Accident,Non Accident}/…
+# Тест accident: DATA_DIR/accident/test/{Accident,Non Accident}/…
+# Тест congestion: prepare_video_ground_truth → congestion/video-gt/labels/test.csv
 "$PY" scripts/evaluate_video_gt.py \
+  --cctv-accidents-root "${DATA_DIR}/CCTV-accidents" \
+  --accident-test-root "${DATA_DIR}/accident/test" \
   --accident-data "${DATA_DIR}/accident/video-gt/images" \
   --congestion-data "${DATA_DIR}/congestion/video-gt" \
   --output "${BENCH_DIR}/video_gt_results.json" \
