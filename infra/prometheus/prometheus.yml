@@ -23,6 +23,20 @@ scrape_configs:
     static_configs:
       - targets: ["coordinator:8098"]
 
+  # Инфраструктура (экспортёры Prometheus)
+  - job_name: elasticsearch
+    static_configs:
+      - targets: ["elasticsearch-exporter:9114"]
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+  - job_name: kafka
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+  - job_name: clickhouse
+    static_configs:
+      - targets: ["clickhouse-exporter:9116"]
+
   - job_name: cadvisor
     static_configs:
       - targets: ["cadvisor:8080"]

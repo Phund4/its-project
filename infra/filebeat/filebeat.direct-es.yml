@@ -1,0 +1,26 @@
+# Запасной вариант: напрямую в Elasticsearch (минуя Logstash), если цепочка Filebeat→Logstash не даёт документов.
+# Использование: в docker-compose смонтировать этот файл вместо filebeat.yml:
+#   - ./filebeat/filebeat.direct-es.yml:/usr/share/filebeat/filebeat.yml:ro
+filebeat.inputs:
+  - type: filestream
+    id: docker-json-all
+    enabled: true
+    paths:
+      - /var/lib/docker/containers/*/*-json.log
+    parsers:
+      - container: ~
+    prospector.scanner.fingerprint.enabled: false
+
+processors:
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+
+setup.template.enabled: false
+setup.ilm.enabled: false
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  index: "piis-docker-logs-%{+yyyy.MM.dd}"
+
+logging.level: info
+logging.to_stderr: true

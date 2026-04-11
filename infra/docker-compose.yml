@@ -1,5 +1,4 @@
-# Локальный стек: KRaft-Kafka (без ZooKeeper), ClickHouse, MinIO, приложения, Prometheus + Grafana.
-# Elasticsearch/Kibana закомментированы — пока не используются.
+# Локальный стек: KRaft-Kafka, ClickHouse, MinIO, ELK (ES + Logstash + Kibana) + Filebeat, приложения, Prometheus + Grafana.
 # Запуск из каталога infra: docker compose up --build -d
 name: traffic-infra
 
@@ -80,41 +79,122 @@ services:
       - its
     restart: "no"
 
-  # elasticsearch:
-  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
-  #   hostname: elasticsearch
-  #   environment:
-  #     - discovery.type=single-node
-  #     - xpack.security.enabled=false
-  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-  #   volumes:
-  #     - es-data:/usr/share/elasticsearch/data
-  #   ports:
-  #     - "9200:9200"
-  #     - "9300:9300"
-  #   networks:
-  #     - its
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -sf http://localhost:9200 >/dev/null || exit 1"]
-  #     interval: 15s
-  #     timeout: 10s
-  #     retries: 6
-  #     start_period: 40s
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    hostname: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - its
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 40s
 
-  # kibana:
-  #   image: docker.elastic.co/kibana/kibana:8.17.0
-  #   hostname: kibana
-  #   environment:
-  #     - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-  #     - ELASTICSEARCH_URL=http://elasticsearch:9200
-  #     - SERVER_HOST=0.0.0.0
-  #   ports:
-  #     - "5601:5601"
-  #   networks:
-  #     - its
-  #   depends_on:
-  #     elasticsearch:
-  #       condition: service_healthy
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.17.0
+    hostname: logstash
+    environment:
+      - LS_JAVA_OPTS=-Xms256m -Xmx512m
+      - PIPELINE_WORKERS=2
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    networks:
+      - its
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.17.0
+    hostname: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - SERVER_HOST=0.0.0.0
+    ports:
+      - "5601:5601"
+    networks:
+      - its
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.17.0
+    hostname: filebeat
+    user: root
+    # Образ по умолчанию передаёт CMD "-environment container" → filebeat воспринимает "container" как подкоманду.
+    command: ["filebeat", "-e", "--strict.perms=false", "-c", "/usr/share/filebeat/filebeat.yml"]
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - its
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      logstash:
+        condition: service_started
+    restart: unless-stopped
+
+  elasticsearch-exporter:
+    image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.7.0
+    hostname: elasticsearch-exporter
+    command:
+      - "--es.uri=http://elasticsearch:9200"
+      - "--es.all"
+    networks:
+      - its
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    hostname: postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://coordinator:coordinator@postgres:5432/coordinator?sslmode=disable"
+    networks:
+      - its
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    hostname: kafka-exporter
+    command:
+      - "--kafka.server=kafka:9092"
+    networks:
+      - its
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  clickhouse-exporter:
+    image: f1yegor/clickhouse-exporter:latest
+    hostname: clickhouse-exporter
+    command:
+      - "-scrape_uri=http://default:@clickhouse:8123"
+    networks:
+      - its
+    depends_on:
+      clickhouse:
+        condition: service_healthy
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
@@ -436,6 +516,10 @@ services:
       - map-portal
       - ml-serving
       - coordinator
+      - elasticsearch-exporter
+      - postgres-exporter
+      - kafka-exporter
+      - clickhouse-exporter
 
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.25.0
@@ -487,7 +571,7 @@ networks:
 volumes:
   postgres-data:
   kafka-kraft-data:
-  # es-data:
+  es-data:
   clickhouse-data:
   minio-data:
   prometheus-data:

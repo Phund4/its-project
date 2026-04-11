@@ -1,0 +1,24 @@
+# Сбор JSON-логов Docker (json-file). fingerprint для filestream на docker-логах должен быть выключен.
+filebeat.inputs:
+  - type: filestream
+    id: docker-json-all
+    enabled: true
+    paths:
+      - /var/lib/docker/containers/*/*-json.log
+    parsers:
+      - container: ~
+    prospector.scanner.fingerprint.enabled: false
+
+processors:
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+
+output.logstash:
+  hosts: ["logstash:5044"]
+  ssl.enabled: false
+  # 0 = без сжатия. Иначе Logstash при распаковке может падать (BeatsParser.inflateCompressedFrame / Netty buffer).
+  compression_level: 0
+
+logging.level: info
+logging.to_stderr: true
+logging.metrics.enabled: true

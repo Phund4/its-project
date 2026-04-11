@@ -40,17 +40,19 @@ docker compose --profile ingest start mediamtx video-source-sim
 docker compose --profile ingest rm -sf mediamtx video-source-sim
 ```
 
-Данные **PostgreSQL**, **ClickHouse**, **Kafka**, **Zookeeper**, **Elasticsearch**, **MinIO**, **Prometheus** (TSDB) и **Grafana** (в том числе дашборды и настройки, созданные в UI) хранятся в именованных томах и переживают перезапуск контейнеров. Конфиг Prometheus по-прежнему файл [`prometheus/prometheus.yml`](prometheus/prometheus.yml); после правок: `docker compose restart prometheus` или lifecycle reload.
+Данные **PostgreSQL**, **ClickHouse**, **Kafka**, **Elasticsearch**, **MinIO**, **Prometheus** (TSDB) и **Grafana** (в том числе дашборды и настройки, созданные в UI) хранятся в именованных томах и переживают перезапуск контейнеров. Конфиг Prometheus — [`prometheus/prometheus.yml`](prometheus/prometheus.yml); после правок: `docker compose restart prometheus` или lifecycle reload.
 
 ## Сервисы и подключение
 
-- **Zookeeper** — внутри сети: `zookeeper:2181`.
-
-- **Kafka** — с хоста: `localhost:9092`; внутри сети: `kafka:29092`. Пример: `export KAFKA_BOOTSTRAP_SERVERS=localhost:9092`.
+- **Kafka** (KRaft, без ZooKeeper) — с хоста: `localhost:9092`; внутри сети: `kafka:9092`. Пример: `export KAFKA_BOOTSTRAP_SERVERS=localhost:9092`.
 
 - **Elasticsearch** — http://localhost:9200 (без логина, dev). Внутри сети: `elasticsearch:9200`.
 
-- **Kibana** — http://localhost:5601
+- **Logstash** — приём от Filebeat (Beats) на **5044**, HTTP API на **9600**. Пайплайн: [`logstash/pipeline/logstash.conf`](logstash/pipeline/logstash.conf) → индексы **`piis-docker-logs-YYYY.MM.DD`** (префикс не `logstash-*`: в ES 8 шаблоны Elastic для `logstash-*` ожидают **data stream** и дают 400 на обычный `index` из Logstash).
+
+- **Filebeat** — читает JSON-логи контейнеров Docker и отправляет в Logstash (см. [`filebeat/filebeat.yml`](filebeat/filebeat.yml)): **filestream** по путям `/var/lib/docker/containers/*/*-json.log`, `prospector.scanner.fingerprint.enabled: false`, `compression_level: 0` к Logstash. В `docker-compose.yml` задан явный `command` (`filebeat -e --strict.perms=false -c …`). В Kibana — **Data view** **`piis-docker-logs-*`**, время **`@timestamp`**. Запасной обход Logstash: [`filebeat/filebeat.direct-es.yml`](filebeat/filebeat.direct-es.yml).
+
+- **Kibana** — http://localhost:5601 (логи: Discover → data view **`piis-docker-logs-*`**).
 
 - **ClickHouse** — HTTP с хоста: `http://localhost:8123`; нативный протокол: `localhost:9000`. Внутри сети: `clickhouse:8123`, `clickhouse:9000`. Пользователь **`default`**, пароль пустой (только dev).
 
@@ -64,10 +66,7 @@ docker compose --profile ingest rm -sf mediamtx video-source-sim
 
 - **MinIO (S3)** — API с хоста: `http://localhost:9050`; консоль: http://localhost:9051. Учётные данные: **`minioadmin` / `minioadmin`**. Внутри сети: endpoint `http://minio:9000`.
 
-- **Prometheus** — http://localhost:9090. Конфиг [`prometheus/prometheus.yml`](prometheus/prometheus.yml) опрашивает **процессы на хосте** (`data_ingestion` :9091, `ml_gateway` :8092, `analytics` :8093, `map_portal` :8096) через **`host.docker.internal`** (у сервиса `prometheus` задан `extra_hosts`), а также:
-  - `blackbox-exporter` (HTTP health-check для `coordinator` и `ml-serving`);
-  - `cadvisor` (CPU/RAM по docker-контейнерам).
-  Нет процесса — target в DOWN, это нормально.
+- **Prometheus** — http://localhost:9090. Конфиг [`prometheus/prometheus.yml`](prometheus/prometheus.yml): scrape **`/metrics`** у прикладных сервисов в сети `traffic-its` (`data-ingestion`, `ml-gateway`, `analytics`, `map-portal`, `ml-serving`, `coordinator`), экспортёры **Elasticsearch**, **PostgreSQL**, **Kafka**, **ClickHouse**, **`cadvisor`**, **`blackbox-exporter`** (HTTP health `coordinator` / `ml-serving`). Часть таргетов может быть DOWN, если сервис не запущен.
 
 - **Grafana** — http://localhost:3000, логин по умолчанию **`admin` / `admin`**. Провижининг из [`grafana/provisioning/`](grafana/provisioning/) (папка дашбордов **Traffic**); созданные вручную дашборды и источники сохраняются в томе **`grafana-data`**. В дашборде **`Сервисы`** (uid `kafka-services`): Kafka ingest, ошибки сервисов, `UP/DOWN` по `up{job=…}` для приложений, CPU/RAM контейнеров по имени контейнера (`name` в cAdvisor; лейблы Compose в метриках часто недоступны, в т.ч. на Docker Desktop).
 
