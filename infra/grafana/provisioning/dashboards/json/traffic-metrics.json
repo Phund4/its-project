@@ -18,52 +18,10 @@
             "lineWidth": 1,
             "showPoints": "never"
           },
-          "unit": "ops"
-        }
-      },
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
-      "id": 1,
-      "options": {
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" }
-      },
-      "targets": [
-        {
-          "expr": "sum by (stage) (rate(data_ingestion_operation_errors_total[5m]))",
-          "legendFormat": "data_ingestion {{stage}}",
-          "refId": "A"
-        },
-        {
-          "expr": "sum by (stage) (rate(ml_gateway_operation_errors_total[5m]))",
-          "legendFormat": "ml_gateway {{stage}}",
-          "refId": "B"
-        },
-        {
-          "expr": "sum by (stage) (rate(analytics_ingest_errors_total[5m]))",
-          "legendFormat": "analytics {{stage}}",
-          "refId": "C"
-        }
-      ],
-      "title": "Ошибки сервисов (скорость счётчиков)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "lineWidth": 1,
-            "showPoints": "never",
-            "axisCenteredZero": false
-          },
-          "max": 1,
-          "min": 0,
           "unit": "percentunit"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "id": 2,
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" }
@@ -101,7 +59,7 @@
           "unit": "none"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "id": 3,
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" }
@@ -120,44 +78,11 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "custom": { "drawStyle": "line", "fillOpacity": 30, "showPoints": "auto" },
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 1 }
-            ]
-          },
-          "unit": "none"
-        }
-      },
-      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 17 },
-      "id": 4,
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      },
-      "targets": [
-        {
-          "expr": "analytics_road_crash_alert",
-          "legendFormat": "{{segment_id}} / {{camera_id}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Индикатор аварии по камере (1 = сработало правило)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": {
           "unit": "ops",
           "custom": { "drawStyle": "bars", "fillOpacity": 80 }
         }
       },
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 24 },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 8 },
       "id": 5,
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" }
@@ -177,7 +102,7 @@
       "fieldConfig": {
         "defaults": { "unit": "ops" }
       },
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 24 },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
       "id": 6,
       "targets": [
         {
@@ -198,5 +123,5 @@
   "timezone": "browser",
   "title": "Ingest, gateway, analytics",
   "uid": "traffic-metrics",
-  "version": 2
+  "version": 4
 }

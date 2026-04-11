@@ -1,4 +1,6 @@
-# Локальный стек: Kafka, Elasticsearch + Kibana, ClickHouse, MinIO, Prometheus + Grafana.
+# Локальный стек: KRaft-Kafka (без ZooKeeper), ClickHouse, MinIO, приложения, Prometheus + Grafana.
+# Elasticsearch/Kibana закомментированы — пока не используются.
+# Запуск из каталога infra: docker compose up --build -d
 name: traffic-infra
 
 services:
@@ -23,98 +25,96 @@ services:
       retries: 8
       start_period: 20s
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.4
-    hostname: zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    volumes:
-      - zookeeper-data:/var/lib/zookeeper/data
-    networks:
-      - its
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "zookeeper-shell localhost:2181 ls / >/dev/null 2>&1 || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 15s
-
+  # KRaft (официальный apache/kafka): без ZooKeeper, данные в томе на log.dirs.
   kafka:
-    image: confluentinc/cp-kafka:7.4.4
+    image: apache/kafka:3.9.0
     hostname: kafka
-    depends_on:
-      zookeeper:
-        condition: service_healthy
     ports:
       - "9092:9092"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 60000
-      # Меньше heap по умолчанию — иначе на Docker Desktop с 2–4 GB RAM брокер часто падает при старте.
-      KAFKA_HEAP_OPTS: -Xmx512M -Xms512M
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_HEAP_OPTS: -Xmx512M -Xms256M
     volumes:
-      - kafka-data:/var/lib/kafka/data
+      - kafka-kraft-data:/tmp/kraft-combined-logs
     networks:
       - its
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1",
         ]
       interval: 10s
-      timeout: 10s
-      retries: 8
-      start_period: 40s
+      timeout: 15s
+      retries: 12
+      start_period: 45s
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
-    hostname: elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    volumes:
-      - es-data:/usr/share/elasticsearch/data
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    networks:
-      - its
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9200 >/dev/null || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 6
-      start_period: 40s
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.17.0
-    hostname: kibana
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - SERVER_HOST=0.0.0.0
-    ports:
-      - "5601:5601"
-    networks:
-      - its
+  kafka-topics-init:
+    image: apache/kafka:3.9.0
     depends_on:
-      elasticsearch:
+      kafka:
         condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        for i in $$(seq 1 40); do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1 && break
+          sleep 2
+        done
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic its.video.ingest --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic its.telemetry.ingest --partitions 3 --replication-factor 1
+    networks:
+      - its
+    restart: "no"
+
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+  #   hostname: elasticsearch
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+  #   volumes:
+  #     - es-data:/usr/share/elasticsearch/data
+  #   ports:
+  #     - "9200:9200"
+  #     - "9300:9300"
+  #   networks:
+  #     - its
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -sf http://localhost:9200 >/dev/null || exit 1"]
+  #     interval: 15s
+  #     timeout: 10s
+  #     retries: 6
+  #     start_period: 40s
+
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:8.17.0
+  #   hostname: kibana
+  #   environment:
+  #     - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+  #     - ELASTICSEARCH_URL=http://elasticsearch:9200
+  #     - SERVER_HOST=0.0.0.0
+  #   ports:
+  #     - "5601:5601"
+  #   networks:
+  #     - its
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
@@ -178,7 +178,23 @@ services:
     networks:
       - its
 
-  # S3-совместимое API (локальный объектный стор для кадров видео).
+  clickhouse-infra-sim-seed:
+    image: clickhouse/clickhouse-server:24.8
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        clickhouse-client --host clickhouse --port 9000 --multiquery < /seed/001_schema.sql &&
+        clickhouse-client --host clickhouse --port 9000 --multiquery < /seed/002_seed.sql
+    volumes:
+      - ./clickhouse/001_schema.sql:/seed/001_schema.sql:ro
+      - ./clickhouse/002_seed.sql:/seed/002_seed.sql:ro
+    networks:
+      - its
+    restart: "no"
+
   minio:
     image: minio/minio:RELEASE.2024-10-29T16-01-48Z
     hostname: minio
@@ -214,10 +230,7 @@ services:
     networks:
       - its
 
-  # RTSP server for camera simulation and ingest tests.
   mediamtx:
-    profiles:
-      - ingest
     image: bluenviron/mediamtx:1.9.3
     hostname: mediamtx
     ports:
@@ -225,10 +238,7 @@ services:
     networks:
       - its
 
-  # Synthetic camera publisher: pushes 2 test streams into mediamtx.
   video-source-sim:
-    profiles:
-      - ingest
     build:
       context: ./video-source-sim
       dockerfile: Dockerfile
@@ -244,26 +254,170 @@ services:
     networks:
       - its
 
-  # Генератор телеметрии автобуса: gRPC на хост, где вручную запущен data-ingestion (:50051).
+  coordinator:
+    build:
+      context: ../services/coordinator
+      dockerfile: Dockerfile
+    hostname: coordinator
+    environment:
+      DATABASE_URL: postgres://coordinator:coordinator@postgres:5432/coordinator?sslmode=disable
+      SOURCES_CONFIG_PATH: /config/sources.yaml
+      INGESTION_INSTANCES_PATH: /config/ingestion_instances.yaml
+      LISTEN_ADDR: ":8098"
+    volumes:
+      - ../services/coordinator/sources.yaml:/config/sources.yaml:ro
+      - ../services/coordinator/ingestion_instances.yaml:/config/ingestion_instances.yaml:ro
+    ports:
+      - "8098:8098"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - its
+
+  analytics:
+    build:
+      context: ../services/analytics
+      dockerfile: Dockerfile
+    hostname: analytics
+    environment:
+      LISTEN_ADDR: ":8093"
+      CLICKHOUSE_ADDR: clickhouse:9000
+      MAP_GRPC_LISTEN_ADDR: ":8097"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_VIDEO: its.video.ingest
+      KAFKA_TOPIC_TELEMETRY: its.telemetry.ingest
+    ports:
+      - "8093:8093"
+      - "8097:8097"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      clickhouse-init:
+        condition: service_completed_successfully
+      clickhouse-infra-sim-seed:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      kafka-topics-init:
+        condition: service_completed_successfully
+    networks:
+      - its
+
+  ml-gateway:
+    build:
+      context: ../services/ml-gateway
+      dockerfile: Dockerfile
+    hostname: ml-gateway
+    environment:
+      LISTEN_ADDR: ":8092"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_VIDEO: its.video.ingest
+      ANALYTICS_BASE_URL: http://analytics:8093
+    ports:
+      - "8092:8092"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-topics-init:
+        condition: service_completed_successfully
+      analytics:
+        condition: service_started
+    networks:
+      - its
+
+  ml-serving:
+    build:
+      context: ../services/ml-serving
+      dockerfile: Dockerfile
+    hostname: ml-serving
+    environment:
+      REPO_ROOT: /workspace
+      ML_GATEWAY_URL: http://ml-gateway:8092
+      WINNERS_JSON: /workspace/.data/ml-experiments/winners.json
+    volumes:
+      - ..:/workspace:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      ml-gateway:
+        condition: service_started
+    networks:
+      - its
+
+  data-ingestion:
+    build:
+      context: ../services/data-ingestion
+      dockerfile: Dockerfile
+    hostname: data-ingestion
+    environment:
+      CONFIG_PATH: /app/config.cameras.docker.yaml
+      COORDINATOR_BASE_URL: http://coordinator:8098
+      COORDINATOR_ZONE_ID: zone-a
+      COORDINATOR_CLUSTER_ID: cluster-1
+      COORDINATOR_INSTANCE_ID: ingest-a1
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      S3_ENDPOINT: http://minio:9000
+      ML_BASE_URL: http://ml-serving:8000
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_TELEMETRY: its.telemetry.ingest
+      TELEMETRY_GRPC_LISTEN_ADDR: ":50051"
+    volumes:
+      - ../services/data-ingestion/config.cameras.docker.yaml:/app/config.cameras.docker.yaml:ro
+    ports:
+      - "9091:9091"
+      - "50051:50051"
+    depends_on:
+      coordinator:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      kafka-topics-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      ml-serving:
+        condition: service_started
+      mediamtx:
+        condition: service_started
+      video-source-sim:
+        condition: service_started
+    networks:
+      - its
+
   bus-telemetry-generator:
-    profiles:
-      - telemetry
     build:
       context: ..
-      dockerfile: data-generators/bus-telemetry/Dockerfile
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      dockerfile: data-generators/telemetry-data/Dockerfile
     environment:
-      BUS_TELEMETRY_GRPC_ADDR: host.docker.internal:50051
+      BUS_TELEMETRY_GRPC_ADDR: data-ingestion:50051
       BUS_TELEMETRY_ALL_CITIES: "true"
+    depends_on:
+      data-ingestion:
+        condition: service_started
+    networks:
+      - its
+
+  map-portal:
+    build:
+      context: ../services
+      dockerfile: map-portal/Dockerfile
+    hostname: map-portal
+    environment:
+      LISTEN_ADDR: ":8096"
+      ANALYTICS_GRPC_ADDR: analytics:8097
+    ports:
+      - "8096:8096"
+    depends_on:
+      analytics:
+        condition: service_started
     networks:
       - its
 
   prometheus:
     image: prom/prometheus:v2.55.1
     hostname: prometheus
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -275,6 +429,13 @@ services:
       - "9090:9090"
     networks:
       - its
+    depends_on:
+      - data-ingestion
+      - ml-gateway
+      - analytics
+      - map-portal
+      - ml-serving
+      - coordinator
 
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.25.0
@@ -325,9 +486,8 @@ networks:
 
 volumes:
   postgres-data:
-  zookeeper-data:
-  kafka-data:
-  es-data:
+  kafka-kraft-data:
+  # es-data:
   clickhouse-data:
   minio-data:
   prometheus-data:

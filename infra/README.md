@@ -69,9 +69,7 @@ docker compose --profile ingest rm -sf mediamtx video-source-sim
   - `cadvisor` (CPU/RAM по docker-контейнерам).
   Нет процесса — target в DOWN, это нормально.
 
-- **Grafana** — http://localhost:3000, логин по умолчанию **`admin` / `admin`**. Провижининг из [`grafana/provisioning/`](grafana/provisioning/) (папка дашбордов **Traffic**); созданные вручную дашборды и источники сохраняются в томе **`grafana-data`**. В дашборде **`Kafka и сервисы`** добавлены:
-  - `UP/DOWN` для `coordinator :8098`, `coordinator :8099`, `ml-serving :8000`;
-  - CPU/RAM по docker-контейнерам из `cadvisor`.
+- **Grafana** — http://localhost:3000, логин по умолчанию **`admin` / `admin`**. Провижининг из [`grafana/provisioning/`](grafana/provisioning/) (папка дашбордов **Traffic**); созданные вручную дашборды и источники сохраняются в томе **`grafana-data`**. В дашборде **`Сервисы`** (uid `kafka-services`): Kafka ingest, ошибки сервисов, `UP/DOWN` по `up{job=…}` для приложений, CPU/RAM контейнеров по имени контейнера (`name` в cAdvisor; лейблы Compose в метриках часто недоступны, в т.ч. на Docker Desktop).
 
 - **MediaMTX** (профиль `ingest`) — `rtsp://localhost:8554`. Запуск: `docker compose --profile ingest up -d --build mediamtx video-source-sim`.
 
