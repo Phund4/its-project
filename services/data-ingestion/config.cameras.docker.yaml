@@ -1,0 +1,34 @@
+# Конфиг для docker compose: S3/ML/RTSP — внутренние имена сервисов.
+s3:
+  endpoint: "http://minio:9000"
+  bucket: "its-frames"
+  prefix: "its-ingest"
+  region: "us-east-1"
+
+ml:
+  base_url: "http://ml-serving:8000"
+  process_path: "/v1/process"
+  timeout_seconds: 30
+
+ingest:
+  target_fps: 5
+  process_workers: 5
+  create_bucket_if_missing: true
+  ffmpeg_path: "ffmpeg"
+
+metrics:
+  listen_addr: ":9091"
+
+cameras:
+  - segment_id: "ring-road-5"
+    camera_id: "cam-01"
+    rtsp_url: "rtsp://mediamtx:8554/cam-01"
+  - segment_id: "ring-road-5"
+    camera_id: "cam-02"
+    rtsp_url: "rtsp://mediamtx:8554/cam-02"
+  - segment_id: "ring-road-5"
+    camera_id: "cam-03"
+    rtsp_url: "rtsp://mediamtx:8554/cam-03"
+  - segment_id: "ring-road-5"
+    camera_id: "cam-04"
+    rtsp_url: "rtsp://mediamtx:8554/cam-04"

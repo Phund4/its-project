@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"traffic-coordinator/internal/app"
 	"traffic-coordinator/internal/core/domain"
 )
@@ -18,6 +20,8 @@ func Run(ctx context.Context, listenAddr string, a *app.App) error {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
+
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	mux.HandleFunc("GET /v1/sources", func(w http.ResponseWriter, r *http.Request) {
 		zoneID := strings.TrimSpace(r.URL.Query().Get("zone_id"))

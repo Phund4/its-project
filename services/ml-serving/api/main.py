@@ -13,8 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-# ROOT = services/ml-serving; репозиторий — на два уровня выше.
-REPO_ROOT = ROOT.parent.parent
+# ROOT = services/ml-serving; репозиторий — на два уровня выше (или REPO_ROOT из окружения для Docker).
+_repo_root = os.environ.get("REPO_ROOT", "").strip()
+REPO_ROOT = Path(_repo_root).resolve() if _repo_root else ROOT.parent.parent
 
 try:
     from dotenv import load_dotenv
@@ -29,6 +30,7 @@ import torch
 import torch.nn as nn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from PIL import Image
 
 sys.path.insert(0, str(ROOT))
@@ -150,6 +152,12 @@ def startup() -> None:
             "ml-gateway и Kafka (its.video.ingest) не получают события. "
             "Задайте переменную окружения или заполните services/ml-serving/.env"
         )
+
+
+@app.get("/metrics")
+def metrics():
+    """Минимальный exposition для Prometheus (up/scrape)."""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")

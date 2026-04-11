@@ -1,10 +1,10 @@
-# Build from repository root: docker build -f data-generators/bus-telemetry/Dockerfile .
+# Build from repository root: docker build -f data-generators/telemetry-data/Dockerfile .
 FROM golang:1.24-bookworm AS builder
 ENV GOTOOLCHAIN=auto
 WORKDIR /src
 COPY services/data-ingestion ./services/data-ingestion
-COPY data-generators/bus-telemetry ./data-generators/bus-telemetry
-WORKDIR /src/data-generators/bus-telemetry
+COPY data-generators/telemetry-data ./data-generators/telemetry-data
+WORKDIR /src/data-generators/telemetry-data
 RUN go mod tidy && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /generator .
 
 FROM gcr.io/distroless/static-debian12:nonroot
