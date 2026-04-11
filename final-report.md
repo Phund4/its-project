@@ -35,7 +35,7 @@
 5. **analytics** — Kafka consumer, запись в **ClickHouse**, бизнес-метрики Prometheus.
 6. **map-portal** — gRPC к analytics, UI/API карты.
 
-**Документация по архитектуре:** логическая схема и протоколы — **`readme.md`** (Mermaid); высокоуровневое описание ЛР1 — **`high-level-design.md`**. При расхождениях итоговой системы с планом ЛР1 правки отражаются в этих файлах и в **`infra/`**.
+**Документация по архитектуре:** полная логическая схема (включая coordinator/data-ingestion), протоколы и мониторинг — **`readme.md`** (Mermaid); краткий запуск, управление compose и «куда смотреть» — **`README.md`**. Высокоуровневое описание ЛР1 — **`high-level-design.md`**. При расхождениях итоговой системы с планом ЛР1 правки отражаются в этих файлах и в **`infra/`**.
 
 ---
 
@@ -75,7 +75,7 @@
 docker compose up --build -d
 ```
 
-Минимальные требования: **Docker** с **Compose V2** (`docker compose`). Подробности — **`infra/README.md`** и **`readme.md`**.
+Минимальные требования: **Docker** с **Compose V2** (`docker compose`). Подробности — **`infra/README.md`**; быстрый старт и таблицы — **`README.md`**, детальная схема — **`readme.md`**.
 
 *Примечание:* **Elasticsearch/Kibana** в compose закомментированы; стек собирается без них.
 
@@ -88,7 +88,7 @@ docker compose up --build -d
 - видео для пайплайна: **`.data/videos/*.mp4`** (см. **`ml-experiments/README.md`**);
 - полный прогон экспериментов — структуры в **`ml-experiments/data/`** (валидация/тест ДТП, ground truth для заторов и т.д., по README).
 
-**Демонстрация:** запуск `cd infra && docker compose up --build -d`; проверка ML — `curl http://localhost:8000/health` (порт **ml-serving** при пробросе из compose); UI — **Grafana** http://localhost:3000; остальные порты — в **`infra/README.md`**. Опционально: скриншоты дашбордов, схемы из **`readme.md`**, видео по требованиям курса.
+**Демонстрация:** запуск `cd infra && docker compose up --build -d`; проверка ML — `curl http://localhost:8000/health` (порт **ml-serving** при пробросе из compose); UI — **Grafana** http://localhost:3000; остальные порты — в **`infra/README.md`**. Опционально: скриншоты дашбордов, схемы из **`readme.md`** / **`README.md`**, видео по требованиям курса.
 
 ---
 
@@ -96,7 +96,8 @@ docker compose up --build -d
 
 | Содержание | Файл |
 |------------|------|
-| Общее описание, диаграммы, мониторинг | `readme.md` |
+| Запуск, управление compose, Grafana/Kibana/Prometheus (кратко), общая диаграмма | `README.md` |
+| Полная логическая схема (вторая диаграмма coordinator), протоколы, мониторинг | `readme.md` |
 | Установка и запуск (Docker) | `infra/README.md` |
 | Архитектура (ЛР1, высокий уровень) | `high-level-design.md` |
 | ML-эксперименты и выбор моделей (ЛР3) | `ml-experiments/README.md` |
