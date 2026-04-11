@@ -1,4 +1,4 @@
-# Логическая схема системы
+# Описание системы
 
 Распределённый контур: приём **видео** (RTSP) и **телеметрии** (gRPC), вызовы **ML** (`ml-serving`), события через **Kafka** в **analytics**, хранение в **ClickHouse** / **MinIO**, координация источников (**coordinator** + **PostgreSQL**), **map-portal** для API карты. Наблюдаемость: **Prometheus** + **Grafana**, логи контейнеров — **Filebeat → Logstash → Elasticsearch**, просмотр в **Kibana**.
 
