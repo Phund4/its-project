@@ -20,7 +20,7 @@ setup.ilm.enabled: false
 
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
-  index: "piis-docker-logs-%{+yyyy.MM.dd}"
+  index: "traffic-docker-logs-%{+yyyy.MM.dd}"
 
 logging.level: info
 logging.to_stderr: true

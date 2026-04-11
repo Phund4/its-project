@@ -48,11 +48,11 @@ docker compose --profile ingest rm -sf mediamtx video-source-sim
 
 - **Elasticsearch** — http://localhost:9200 (без логина, dev). Внутри сети: `elasticsearch:9200`.
 
-- **Logstash** — приём от Filebeat (Beats) на **5044**, HTTP API на **9600**. Пайплайн: [`logstash/pipeline/logstash.conf`](logstash/pipeline/logstash.conf) → индексы **`piis-docker-logs-YYYY.MM.DD`** (префикс не `logstash-*`: в ES 8 шаблоны Elastic для `logstash-*` ожидают **data stream** и дают 400 на обычный `index` из Logstash).
+- **Logstash** — приём от Filebeat (Beats) на **5044**, HTTP API на **9600**. Пайплайн: [`logstash/pipeline/logstash.conf`](logstash/pipeline/logstash.conf) → индексы **`traffic-docker-logs-YYYY.MM.DD`** (префикс не `logstash-*`: в ES 8 шаблоны Elastic для `logstash-*` ожидают **data stream** и дают 400 на обычный `index` из Logstash).
 
-- **Filebeat** — читает JSON-логи контейнеров Docker и отправляет в Logstash (см. [`filebeat/filebeat.yml`](filebeat/filebeat.yml)): **filestream** по путям `/var/lib/docker/containers/*/*-json.log`, `prospector.scanner.fingerprint.enabled: false`, `compression_level: 0` к Logstash. В `docker-compose.yml` задан явный `command` (`filebeat -e --strict.perms=false -c …`). В Kibana — **Data view** **`piis-docker-logs-*`**, время **`@timestamp`**. Запасной обход Logstash: [`filebeat/filebeat.direct-es.yml`](filebeat/filebeat.direct-es.yml).
+- **Filebeat** — читает JSON-логи контейнеров Docker и отправляет в Logstash (см. [`filebeat/filebeat.yml`](filebeat/filebeat.yml)): **filestream** по путям `/var/lib/docker/containers/*/*-json.log`, `prospector.scanner.fingerprint.enabled: false`, `compression_level: 0` к Logstash. В `docker-compose.yml` задан явный `command` (`filebeat -e --strict.perms=false -c …`). В Kibana — **Data view** **`traffic-docker-logs-*`**, время **`@timestamp`**. Запасной обход Logstash: [`filebeat/filebeat.direct-es.yml`](filebeat/filebeat.direct-es.yml).
 
-- **Kibana** — http://localhost:5601 (логи: Discover → data view **`piis-docker-logs-*`**).
+- **Kibana** — http://localhost:5601 (логи: Discover → data view **`traffic-docker-logs-*`**).
 
 - **ClickHouse** — HTTP с хоста: `http://localhost:8123`; нативный протокол: `localhost:9000`. Внутри сети: `clickhouse:8123`, `clickhouse:9000`. Пользователь **`default`**, пароль пустой (только dev).
 
